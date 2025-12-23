@@ -1,0 +1,3 @@
+[submodule "zerotier-sockets-apple-framework"]
+	path = zerotier-sockets-apple-framework
+	url = https://github.com/zerotier/zerotier-sockets-apple-framework.git
