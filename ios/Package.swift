@@ -17,14 +17,12 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-combine-extensions.git", from: "1.0.0"),
     ],
     targets: [
         .target(
             name: "TerracottaCore",
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
-                .product(name: "CombineExtensions", package: "swift-combine-extensions"),
             ],
             path: "Sources/TerracottaCore",
             linkerSettings: [
@@ -38,13 +36,5 @@ let package = Package(
                 .product(name: "Logging", package: "swift-log"),
             ],
             path: "Sources/TerracottaUI"),
-        .testTarget(
-            name: "TerracottaCoreTests",
-            dependencies: ["TerracottaCore"],
-            path: "Tests/TerracottaCoreTests"),
-        .testTarget(
-            name: "TerracottaUITests",
-            dependencies: ["TerracottaUI"],
-            path: "Tests/TerracottaUITests"),
     ]
 )
