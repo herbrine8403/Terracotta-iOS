@@ -30,8 +30,6 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("NetworkExtension"),
                 .linkedFramework("SystemConfiguration"),
-                .unsafeFlags(["-L\(projectDirectory)/Frameworks"]),
-                .unsafeFlags(["-lzt"]),
             ]),
         .target(
             name: "TerracottaUI",
@@ -50,6 +48,3 @@ let package = Package(
             path: "Tests/TerracottaUITests"),
     ]
 )
-
-// Helper to get project directory
-let projectDirectory = #file.split(separator: "/").dropLast().joined(separator: "/")
