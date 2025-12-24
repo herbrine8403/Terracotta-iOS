@@ -57,6 +57,22 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
     
+    - name: Cache Swift Package Manager
+      uses: actions/cache@v4
+      with:
+        path: ios/.build
+        key: ${{ runner.os }}-spm-${{ hashFiles('ios/Package.swift') }}
+        restore-keys: |
+          ${{ runner.os }}-spm-
+    
+    - name: Cache iOS Build Artifacts
+      uses: actions/cache@v4
+      with:
+        path: ios/build
+        key: ${{ runner.os }}-ios-build-${{ hashFiles('ios/**/*.{swift,h,c,m,plist}') }}
+        restore-keys: |
+          ${{ runner.os }}-ios-build-
+    
     - name: Install iOS targets
       run: |
         rustup target add aarch64-apple-ios
@@ -65,8 +81,8 @@ jobs:
     
     - name: Install cargo tools
       run: |
-        cargo install cargo-lipo
-        cargo install cbindgen
+        cargo install cargo-lipo --version 3.6.0
+        cargo install cbindgen --version 0.26.0
     
     - name: Setup build environment
       run: |
