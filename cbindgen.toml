@@ -1,0 +1,18 @@
+language = "C"
+include_version = false
+
+[parse]
+parse_deps = false
+include = ["src/lib.rs"]
+
+[export]
+item_types = ["functions", "types", "globals"]
+
+[fn]
+rename_args = "camelCase"
+
+[struct]
+rename_fields = "camelCase"
+
+[enum]
+rename_variants = "camelCase"
