@@ -143,11 +143,20 @@ build_rust_core() {
     rustup target add x86_64-apple-ios
     rustup target add aarch64-apple-ios-sim
     
-    # Build universal library
-    cargo lipo --release --targets aarch64-apple-ios,x86_64-apple-ios
+    # For iOS, use regular cargo build instead of cargo lipo since we're just generating bindings
+    # and iOS uses staticlib or cdylib that will be linked differently
+    cargo build --release --target aarch64-apple-ios
     
-    # Create header file from Rust code
-    cbindgen --config cbindgen.toml --crate terracotta_core --output "$IOS_DIR/Sources/TerracottaCore/Native/terracotta_generated.h"
+    # Create header file from Rust code - only if the crate exists and can be processed
+    if [ -f "src/lib.rs" ]; then
+        if command -v cbindgen &> /dev/null; then
+            cbindgen --config cbindgen.toml --crate terracotta -o "$IOS_DIR/Sources/TerracottaCore/Native/terracotta_generated.h"
+        else
+            print_warning "cbindgen not found, skipping header generation"
+        fi
+    else
+        print_warning "src/lib.rs not found, skipping header generation"
+    fi
     
     print_status "Rust core library built successfully"
 }
