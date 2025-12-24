@@ -10,7 +10,7 @@ let package = Package(
     products: [
         .library(
             name: "TerracottaCore",
-            targets: ["TerracottaCore"]),
+            targets: ["TerracottaCoreWrapper"]),
         .library(
             name: "TerracottaUI",
             targets: ["TerracottaUI"]),
@@ -20,19 +20,30 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "TerracottaCore",
+            name: "TerracottaCoreC",
+            path: "Sources/TerracottaCore/Native",
+            publicHeadersPath: ".",
+            cSettings: [
+                .headerSearchPath("../"),
+            ]
+        ),
+        .target(
+            name: "TerracottaCoreWrapper",
             dependencies: [
+                "TerracottaCoreC",
                 .product(name: "Logging", package: "swift-log"),
             ],
             path: "Sources/TerracottaCore",
+            exclude: ["Native"],
             linkerSettings: [
                 .linkedFramework("NetworkExtension"),
                 .linkedFramework("SystemConfiguration"),
-            ]),
+            ]
+        ),
         .target(
             name: "TerracottaUI",
             dependencies: [
-                "TerracottaCore",
+                "TerracottaCoreWrapper",
                 .product(name: "Logging", package: "swift-log"),
             ],
             path: "Sources/TerracottaUI"),

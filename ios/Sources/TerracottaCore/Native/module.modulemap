@@ -1,0 +1,4 @@
+module TerracottaCoreC {
+    header "terracotta.h"
+    export *
+}

@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import os.log
+import TerracottaCoreC
 
 public class TerracottaCore: ObservableObject {
     public static let shared = TerracottaCore()
