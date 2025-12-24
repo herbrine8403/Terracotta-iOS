@@ -1,20 +1,22 @@
 # Terracotta | 陶瓦联机
 
-Terracotta 是一个基于 EasyTier 开发的 Minecraft: Java Edition 联机助手，为玩家提供开箱即用的联机功能。项目针对 Minecraft 做了大量优化，尽量降低操作门槛并集成了 HMCL 启动器支持。
+Terracotta 是一个基于 EasyTier 和 ZeroTier 开发的 Minecraft: Java Edition 联机助手，为玩家提供开箱即用的联机功能。项目针对 Minecraft 做了大量优化，尽量降低操作门槛并集成了 HMCL 启动器支持。
 
 ## 项目概述
 
 ### 核心功能
 - **一键联机**: 无需复杂配置，轻松创建或加入 Minecraft 房间
-- **跨平台支持**: 支持 Windows、Linux、macOS、FreeBSD 和 Android 平台
+- **跨平台支持**: 支持 Windows、Linux、macOS、FreeBSD、Android 和 iOS 平台
 - **自动发现**: 自动扫描本地 Minecraft 服务器
 - **房间系统**: 基于邀请码的房间管理机制
 - **HMCL 集成**: 与 HMCL 启动器深度集成
 
 ### 技术架构
 - **后端**: Rust 编写的高性能网络服务
-- **前端**: 响应式 Web 界面，支持移动设备
-- **网络层**: 基于 EasyTier 的 P2P 网络连接
+- **前端**: 响应式 Web 界面（桌面端）和 SwiftUI（iOS端）
+- **网络层**: 
+  - 桌面/Android: 基于 EasyTier 的 P2P 网络连接
+  - iOS: 基于 ZeroTier libzt 的 P2P 网络连接
 - **协议支持**: 多种房间协议（Terracotta Legacy、PCL2CE、Experimental）
 
 ## 项目结构
@@ -42,7 +44,22 @@ Terracotta/
 │   ├── windows/          # Windows 平台资源
 │   └── publish/          # 发布脚本
 ├── ffi/                   # Android JNI 接口
+├── ios/                   # iOS 平台实现
+│   ├── Package.swift      # Swift Package 配置
+│   ├── Info.plist         # 应用信息配置
+│   ├── Sources/           # 源代码目录
+│   │   ├── TerracottaCore/ # 核心功能模块
+│   │   │   ├── TerracottaCore.swift # 主入口
+│   │   │   ├── VPNManager.swift   # VPN 管理
+│   │   │   └── Native/            # 原生代码桥接
+│   │   └── TerracottaUI/  # UI 模块
+│   │       ├── Views/     # 视图组件
+│   │       └── ViewModels/# 视图模型
+│   ├── Extensions/        # Network Extension
+│   ├── Scripts/           # 构建脚本
+│   └── Tests/             # 测试代码
 ├── timestamp/             # 编译时间戳子模块
+├── zerotier-sockets-apple-framework/ # ZeroTier Apple 框架
 └── .github/workflows/     # CI/CD 配置
 ```
 
@@ -50,7 +67,8 @@ Terracotta/
 
 ### 前置要求
 - Rust 2024 Edition (nightly toolchain)
-- Node.js 18+ (用于前端开发)
+- Swift 5.9+ (iOS 开发)
+- Xcode 14.0+ (iOS 开发)
 - Android SDK (Android 开发)
 
 ### 构建命令
@@ -77,6 +95,18 @@ export PATH="$PATH:$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
 cargo +nightly ndk build --release --lib --target aarch64-linux-android
 ```
 
+#### iOS 平台
+```bash
+# iOS 环境设置
+cd ios
+chmod +x Scripts/setup.sh
+./Scripts/setup.sh
+
+# 构建 iOS 应用
+chmod +x Scripts/build.sh
+./Scripts/build.sh build
+```
+
 ### 开发服务器
 ```bash
 # 启动开发服务器（会自动打开浏览器）
@@ -93,9 +123,10 @@ cargo +nightly run -- --hmcl /path/to/socket/file
 - **房间管理**: 处理房间创建、加入和生命周期
 - **API 接口**: 提供 RESTful API 供前端调用
 
-### EasyTier 集成
-- **网络管理**: 管理 EasyTier 进程和网络连接
-- **VPN 集成**: 处理 VPN 服务请求（Android）
+### 网络集成
+- **桌面/Android (EasyTier)**: 管理 EasyTier 进程和网络连接
+- **iOS (ZeroTier)**: 管理 ZeroTier libzt 连接
+- **VPN 集成**: 处理 VPN 服务请求（Android 和 iOS）
 - **节点发现**: 发现和管理网络节点
 
 ### 服务器 (Server)
@@ -125,6 +156,22 @@ GET /log            # 获取日志文件
 POST /panic         # 触发程序崩溃（调试用）
 ```
 
+## iOS 特定实现
+
+### iOS 架构
+iOS 版本采用了不同的技术栈：
+- **网络层**: ZeroTier libzt 框架（替代 Android 版本的 EasyTier）
+- **UI 框架**: SwiftUI + Combine（现代化响应式界面）
+- **VPN 集成**: Network Extension 框架（iOS 原生 VPN 支持）
+- **桥接技术**: Objective-C + Rust FFI（高效的原生代码集成）
+
+### iOS 特性
+- 支持 iOS 15.0+
+- 支持 iPhone 和 iPad
+- 现代化 SwiftUI 界面
+- 自动网络发现
+- 实时状态同步
+
 ## 部署和发布
 
 ### 自动构建
@@ -134,6 +181,7 @@ POST /panic         # 触发程序崩溃（调试用）
 - macOS (x86_64, ARM64)
 - FreeBSD (x86_64)
 - Android (ARM, ARM64, x86, x86_64)
+- iOS (ARM64, x86_64)
 
 ### 发布流程
 1. 代码推送到主分支触发自动构建
@@ -157,7 +205,7 @@ gh release create v1.0.0 --generate-notes
 
 ### 网络配置
 - **默认端口**: 13448（脚手架服务）
-- **EasyTier 版本**: v2.4.6
+- **EasyTier 版本**: v2.4.6（桌面/Android）
 - **网络协议**: 支持 IPv4/IPv6
 
 ## 故障排除
@@ -165,8 +213,9 @@ gh release create v1.0.0 --generate-notes
 ### 常见问题
 1. **端口占用**: 检查 13448 端口是否被占用
 2. **防火墙**: 确保防火墙允许程序通信
-3. **EasyTier 崩溃**: 查看日志文件获取详细错误信息
+3. **EasyTier/ZeroTier 崩溃**: 查看日志文件获取详细错误信息
 4. **网络连接**: 检查网络连接和 DNS 设置
+5. **iOS VPN 权限**: 确保授予网络扩展权限
 
 ### 调试功能
 - **日志导出**: Shift+双击标题栏导出日志
@@ -188,6 +237,7 @@ gh release create v1.0.0 --generate-notes
 ### 代码规范
 - 使用 Rust 2024 Edition
 - 遵循 Rust 官方代码风格
+- 遵循 Swift 代码规范（iOS 部分）
 - 添加适当的注释和文档
 
 ### 提交流程
@@ -203,6 +253,10 @@ cargo +nightly test
 
 # 运行特定测试
 cargo +nightly test --test integration_test
+
+# iOS 测试
+cd ios
+./Scripts/build.sh test
 ```
 
 ## 社区和支持
@@ -223,3 +277,4 @@ cargo +nightly test --test integration_test
 - 优化网络连接稳定性
 - 改进用户界面体验
 - 增强错误处理机制
+- 添加 iOS 平台支持（采用 ZeroTier libzt 替代 EasyTier）
