@@ -121,7 +121,14 @@ jobs:
     - name: Create Xcode project
       run: |
         cd ios
-        swift package generate-xcodeproj
+        swift build --build-tests
+        # Generate Xcode project only if needed, but modern Xcode can work with Package.swift directly
+        # The generate-xcodeproj command might not be available in newer Swift versions
+        if command -v swift package generate-xcodeproj &> /dev/null; then
+          swift package generate-xcodeproj
+        else
+          echo "swift package generate-xcodeproj is not available, using Package.swift directly"
+        fi
     
     - name: Run iOS Tests
       run: |
