@@ -36,20 +36,44 @@ download_zerotier_framework() {
     print_status "Downloading ZeroTier framework..."
     
     ZT_VERSION="1.8.8"
-    ZT_FRAMEWORK_URL="https://download.zerotier.com/dist/ZeroTierOne-${ZT_VERSION}-iOS.zip"
+    # Using the GitHub releases URL as the primary source
+    ZT_FRAMEWORK_URL="https://github.com/zerotier/ZeroTierOne/releases/download/${ZT_VERSION}/ZeroTierOne-${ZT_VERSION}-iOS.zip"
     ZT_ARCHIVE="$BUILD_DIR/ZeroTierOne.zip"
     
     mkdir -p "$BUILD_DIR"
     
     if [ ! -f "$ZT_ARCHIVE" ]; then
-        curl -L -o "$ZT_ARCHIVE" "$ZT_FRAMEWORK_URL"
+        print_status "Attempting to download from GitHub: $ZT_FRAMEWORK_URL"
+        if curl -L -o "$ZT_ARCHIVE" "$ZT_FRAMEWORK_URL"; then
+            print_status "Successfully downloaded ZeroTier framework from GitHub"
+        else
+            # Fallback to the original URL if GitHub fails
+            print_warning "GitHub download failed, trying original URL"
+            ZT_FRAMEWORK_URL="https://download.zerotier.com/dist/ZeroTierOne-${ZT_VERSION}-iOS.zip"
+            curl -L -o "$ZT_ARCHIVE" "$ZT_FRAMEWORK_URL"
+        fi
     else
         print_status "ZeroTier archive already exists, skipping download"
     fi
     
-    # Extract framework
+    # Extract framework with error checking
+    print_status "Extracting ZeroTier framework..."
     cd "$BUILD_DIR"
-    unzip -o "ZeroTierOne.zip"
+    
+    # Check if the downloaded file is actually a valid zip file
+    if ! file "$BUILD_DIR/ZeroTierOne.zip" | grep -q "Zip archive"; then
+        print_error "Downloaded file is not a valid zip archive"
+        exit 1
+    fi
+    
+    if unzip -o "ZeroTierOne.zip"; then
+        print_status "Successfully extracted ZeroTier framework"
+    else
+        print_error "Failed to extract ZeroTier framework archive"
+        ls -la "ZeroTierOne.zip"
+        file "ZeroTierOne.zip"
+        exit 1
+    fi
     
     # Copy framework to project
     if [ -d "ZeroTierOne.xcframework" ]; then
@@ -57,8 +81,14 @@ download_zerotier_framework() {
         mkdir -p "$FRAMEWORKS_DIR"
         cp -r "ZeroTierOne.xcframework/ios-arm64/zt.framework" "$FRAMEWORKS_DIR/"
         print_status "ZeroTier framework installed successfully"
+    elif [ -d "zt.xcframework" ]; then
+        rm -rf "$FRAMEWORKS_DIR/zt.framework"
+        mkdir -p "$FRAMEWORKS_DIR"
+        cp -r "zt.xcframework/ios-arm64/zt.framework" "$FRAMEWORKS_DIR/"
+        print_status "ZeroTier framework installed successfully"
     else
-        print_error "Failed to extract ZeroTier framework"
+        print_error "Failed to extract ZeroTier framework - expected xcframework not found"
+        ls -la
         exit 1
     fi
 }
