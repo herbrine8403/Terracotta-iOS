@@ -182,6 +182,7 @@ fn download_easytier() {
             desc: "freebsd-x86_64",
         },
         ("android", "arm") | ("android", "aarch64") | ("android", "x86") | ("android", "x86_64") => return,
+        ("ios", _) => return,  // iOS doesn't need EasyTier
         _ => panic!(
             "Cannot compile Terracotta on {}-{}: Cannot find valid EasyTier binary.",
             target_os, target_arch
