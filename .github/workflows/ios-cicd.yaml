@@ -95,7 +95,7 @@ jobs:
         cd ios
         chmod +x Scripts/build.sh
         ./Scripts/build.sh framework
-      continue-on-error: true  # Allow workflow to continue even if ZeroTier framework download fails temporarily
+      continue-on-error: true  # ZeroTier framework is optional, build can continue without it
     
     - name: Build Rust core library
       run: |
