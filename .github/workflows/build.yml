@@ -33,6 +33,14 @@ jobs:
       with:
         xcode-version: '16.0.0'
     
+    - name: Install xcodegen
+      run: |
+        brew install xcodegen
+    
+    - name: Generate Xcode project
+      run: |
+        xcodegen generate
+    
     - name: Build iOS app
       run: |
         xcodebuild -project Terracotta.xcodeproj -scheme Terracotta -destination 'platform=iOS Simulator,name=iPhone 13' build
