@@ -19,7 +19,7 @@ targets:
     dependencies:
       - target: TerracottaShared
   TerracottaNetworkExtension:
-    type: extension
+    type: app-extension
     platform: iOS
     extensionPoint: com.apple.networkextension.packet-tunnel
     sources: [TerracottaNetworkExtension]
