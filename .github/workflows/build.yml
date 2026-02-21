@@ -19,6 +19,10 @@ jobs:
         profile: minimal
         override: true
     
+    - name: Install Protocol Buffers
+      run: |
+        brew install protobuf
+    
     - name: Build Core library
       run: |
         cd Core
