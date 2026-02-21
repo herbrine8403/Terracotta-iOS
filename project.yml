@@ -12,6 +12,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: site.yinmo.terracotta
         DEVELOPMENT_TEAM: ""
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_IDENTITY: ""
     entitlements:
       path: Terracotta/Terracotta.entitlements
     info:
@@ -27,6 +30,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: site.yinmo.terracotta.TerracottaNetworkExtension
         DEVELOPMENT_TEAM: ""
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_IDENTITY: ""
     entitlements:
       path: TerracottaNetworkExtension/TerracottaNetworkExtension.entitlements
     info:
@@ -37,3 +43,8 @@ targets:
     type: framework
     platform: iOS
     sources: [TerracottaShared]
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_IDENTITY: ""
