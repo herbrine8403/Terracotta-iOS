@@ -1,6 +1,7 @@
 import Foundation
 import NetworkExtension
 import os
+import TerracottaShared
 
 class NetworkExtensionManager: ObservableObject {
     @Published var status: ConnectionStatus = .disconnected

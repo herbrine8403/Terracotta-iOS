@@ -1,5 +1,7 @@
 import Foundation
 import os
+import UIKit
+import TerracottaShared
 
 class LogTailer: ObservableObject {
     @Published var logLines: [String] = []
@@ -78,11 +80,11 @@ class LogTailer: ObservableObject {
         stopObserving()
         
         observation = NotificationCenter.default.addObserver(
-            forName: .NSFileHandleReadCompletion,
+            forName: FileHandle.readCompletionNotification,
             object: nil,
             queue: OperationQueue.main
         ) { [weak self] (notification) in
-            guard let self = self, let data = notification.userInfo?[NSFileHandleNotificationDataItem] as? Data else {
+            guard let self = self, let data = notification.userInfo?[FileHandle.notificationDataItem] as? Data else {
                 return
             }
             

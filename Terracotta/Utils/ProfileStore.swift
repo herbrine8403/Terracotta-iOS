@@ -1,4 +1,5 @@
 import Foundation
+import TerracottaShared
 import os
 
 class ProfileStore: ObservableObject {
@@ -95,7 +96,7 @@ class ProfileStore: ObservableObject {
             
             // 编码并写入文件
             let data = try JSONEncoder().encode(profiles)
-            try data.write(to: profilesURL, options: .atomic)
+            try data.write(to: profilesURL, options: .atomicWrite)
         } catch {
             os_log("Failed to save profiles to iCloud: %{public}s", log: OSLog.default, type: .error, error.localizedDescription)
             saveProfilesToLocal()
