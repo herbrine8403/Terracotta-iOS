@@ -1,4 +1,4 @@
-use std::{ffi::CString, fs::File, sync::{Arc, Mutex}};
+use std::ffi::CString;
 
 use easytier::{common::{config::{ConfigFileControl, TomlConfigLoader}, global_ctx::GlobalCtxEvent}, launcher::NetworkInstance};
 
@@ -159,7 +159,7 @@ pub extern "C" fn create_room(
         if room_name.is_null() {
             return Err("room_name is nullptr".to_string());
         }
-        let room_name = unsafe {
+        let _room_name = unsafe {
             std::ffi::CStr::from_ptr(room_name)
                 .to_string_lossy()
                 .into_owned()
@@ -209,7 +209,7 @@ pub extern "C" fn join_room(
         if room_code.is_null() {
             return Err("room_code is nullptr".to_string());
         }
-        let room_code = unsafe {
+        let _room_code = unsafe {
             std::ffi::CStr::from_ptr(room_code)
                 .to_string_lossy()
                 .into_owned()
