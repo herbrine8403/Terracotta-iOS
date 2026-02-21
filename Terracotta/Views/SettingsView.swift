@@ -60,7 +60,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+
             
             Spacer()
         }
