@@ -34,16 +34,6 @@ targets:
     dependencies:
       - target: TerracottaShared
   TerracottaShared:
-    type: static-library
+    type: framework
     platform: iOS
     sources: [TerracottaShared]
-  Core:
-    type: static-library
-    platform: iOS
-    sources: [Core]
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: site.yinmo.terracotta.Core
-        DEVELOPMENT_TEAM: ""
-        SWIFT_INCLUDE_PATHS: $(SRCROOT)/TerracottaNetworkExtension
-        SWIFT_OBJC_BRIDGING_HEADER: $(SRCROOT)/TerracottaNetworkExtension/TerracottaNetworkExtension-Bridging-Header.h

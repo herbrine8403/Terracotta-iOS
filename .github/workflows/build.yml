@@ -12,21 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        override: true
-    
-    - name: Install Protocol Buffers
-      run: |
-        brew install protobuf
-    
-    - name: Build Core library
-      run: |
-        cd Core
-        cargo build --release
+    # Core library is built separately and linked manually
     
     - name: Set up Xcode
       uses: maxim-lobanov/setup-xcode@v1
