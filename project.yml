@@ -1,0 +1,49 @@
+name: Terracotta
+options:
+  bundleIdPrefix: site.yinmo
+  deploymentTarget:
+    iOS: 14.5
+targets:
+  Terracotta:
+    type: application
+    platform: iOS
+    sources: [Terracotta]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: site.yinmo.terracotta
+        DEVELOPMENT_TEAM: ""
+    entitlements:
+      path: Terracotta/Terracotta.entitlements
+    info:
+      path: Terracotta/Info.plist
+    dependencies:
+      - target: TerracottaShared
+  TerracottaNetworkExtension:
+    type: extension
+    platform: iOS
+    extensionPoint: com.apple.networkextension.packet-tunnel
+    sources: [TerracottaNetworkExtension]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: site.yinmo.terracotta.TerracottaNetworkExtension
+        DEVELOPMENT_TEAM: ""
+    entitlements:
+      path: TerracottaNetworkExtension/TerracottaNetworkExtension.entitlements
+    info:
+      path: TerracottaNetworkExtension/Info.plist
+    dependencies:
+      - target: TerracottaShared
+  TerracottaShared:
+    type: library
+    platform: iOS
+    sources: [TerracottaShared]
+  Core:
+    type: library.static
+    platform: iOS
+    sources: [Core]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: site.yinmo.terracotta.Core
+        DEVELOPMENT_TEAM: ""
+        SWIFT_INCLUDE_PATHS: $(SRCROOT)/TerracottaNetworkExtension
+        SWIFT_OBJC_BRIDGING_HEADER: $(SRCROOT)/TerracottaNetworkExtension/TerracottaNetworkExtension-Bridging-Header.h
