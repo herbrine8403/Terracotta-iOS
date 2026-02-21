@@ -1,4 +1,5 @@
 import SwiftUI
+import TerracottaShared
 import os
 
 @main

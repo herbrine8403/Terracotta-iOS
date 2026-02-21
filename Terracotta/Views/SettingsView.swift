@@ -1,4 +1,5 @@
 import SwiftUI
+import TerracottaShared
 
 struct SettingsView: View {
     @EnvironmentObject private var profileStore: ProfileStore

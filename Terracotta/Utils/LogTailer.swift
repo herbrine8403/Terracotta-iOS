@@ -84,7 +84,7 @@ class LogTailer: ObservableObject {
             object: nil,
             queue: OperationQueue.main
         ) { [weak self] (notification) in
-            guard let self = self, let data = notification.userInfo?[FileHandle.notificationDataItem] as? Data else {
+            guard let self = self, let data = notification.userInfo?[NSFileHandleNotificationDataItem] as? Data else {
                 return
             }
             

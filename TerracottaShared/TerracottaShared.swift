@@ -27,7 +27,10 @@ public struct TerracottaOptions: Codable {
     public init() {}
 }
 
-public struct RoomInfo: Codable {
+public struct RoomInfo: Codable, Identifiable {
+    public var id: String {
+        return code
+    }
     public var code: String
     public var name: String
     public var created: Date

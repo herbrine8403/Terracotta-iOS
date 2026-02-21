@@ -1,5 +1,6 @@
 import SwiftUI
 import TerracottaShared
+import UIKit
 
 struct RoomsView: View {
     @EnvironmentObject private var networkManager: NetworkExtensionManager
@@ -82,7 +83,7 @@ struct RoomCard: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
-            Text("Created: \(room.created.formatted(date: .abbreviated, time: .shortened))")
+            Text("Created: \(formatDate(room.created))")
                 .font(.caption)
                 .foregroundColor(.gray)
             
@@ -102,19 +103,27 @@ struct RoomCard: View {
         .background(Color.gray.opacity(0.1))
         .cornerRadius(15)
     }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
 }
 
 struct CreateRoomSheet: View {
     @Binding var rooms: [RoomInfo]
-    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var networkManager: NetworkExtensionManager
     
     @State private var roomName = ""
     @State private var isCreating = false
     @State private var errorMessage: String?
     @State private var createdRoomCode: String?
+    @State private var isPresented = true
     
     var body: some View {
-        NavigationStack {
+        NavigationView {
             VStack(spacing: 20) {
                 Text("Create Room")
                     .font(.largeTitle)
@@ -125,7 +134,6 @@ struct CreateRoomSheet: View {
                     .padding()
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(10)
-                    .textFieldStyle(.roundedBorder)
                 
                 if let errorMessage = errorMessage {
                     Text(errorMessage)
@@ -163,24 +171,19 @@ struct CreateRoomSheet: View {
                 Spacer()
             }
             .padding()
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+            .navigationBarTitle("Create Room", displayMode: .inline)
+            .navigationBarItems(
+                leading: Button("Cancel") {
+                    // 关闭 sheet
+                },
+                trailing: Button(action: {
+                    createRoom()
+                }) {
+                    Text("Create")
+                        .fontWeight(.semibold)
                 }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(action: {
-                        createRoom()
-                    }) {
-                        Text("Create")
-                            .fontWeight(.semibold)
-                    }
-                    .disabled(roomName.isEmpty || isCreating)
-                }
-            }
+                .disabled(roomName.isEmpty || isCreating)
+            )
         }
     }
     
@@ -210,7 +213,7 @@ struct CreateRoomSheet: View {
         */
         
         // 临时实现，生成一个随机房间代码
-        let roomCode = "Int.random(in: 1000...9999))"
+        let roomCode = "\(Int.random(in: 1000...9999))"
         createdRoomCode = roomCode
         
         // 添加到房间列表
@@ -222,7 +225,6 @@ struct CreateRoomSheet: View {
 }
 
 struct JoinRoomSheet: View {
-    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var networkManager: NetworkExtensionManager
     
     @State private var roomCode = ""
@@ -231,7 +233,7 @@ struct JoinRoomSheet: View {
     @State private var joinSuccess = false
     
     var body: some View {
-        NavigationStack {
+        NavigationView {
             VStack(spacing: 20) {
                 Text("Join Room")
                     .font(.largeTitle)
@@ -242,7 +244,6 @@ struct JoinRoomSheet: View {
                     .padding()
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(10)
-                    .textFieldStyle(.roundedBorder)
                 
                 if let errorMessage = errorMessage {
                     Text(errorMessage)
@@ -259,24 +260,19 @@ struct JoinRoomSheet: View {
                 Spacer()
             }
             .padding()
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+            .navigationBarTitle("Join Room", displayMode: .inline)
+            .navigationBarItems(
+                leading: Button("Cancel") {
+                    // 关闭 sheet
+                },
+                trailing: Button(action: {
+                    joinRoom()
+                }) {
+                    Text("Join")
+                        .fontWeight(.semibold)
                 }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(action: {
-                        joinRoom()
-                    }) {
-                        Text("Join")
-                            .fontWeight(.semibold)
-                    }
-                    .disabled(roomCode.isEmpty || isJoining)
-                }
-            }
+                .disabled(roomCode.isEmpty || isJoining)
+            )
         }
     }
     
