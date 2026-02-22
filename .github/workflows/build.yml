@@ -39,11 +39,26 @@ jobs:
           archive \
           -archivePath build/Terracotta.xcarchive
     
+    - name: Debug archive structure
+      run: |
+        echo "=== Archive structure ==="
+        find build -type f -name "*.app" -o -name "*.app" -type d 2>/dev/null || true
+        echo "=== Full archive contents ==="
+        ls -laR build/Terracotta.xcarchive/ || true
+    
     - name: Package app for distribution
       run: |
-        # Create a zip of the .app bundle for testing
-        cd build/Terracotta.xcarchive/Products/Applications
-        zip -r ../../Terracotta.app.zip Terracotta.app
+        # Find and package the .app bundle
+        APP_PATH=$(find build/Terracotta.xcarchive -name "*.app" -type d | head -1)
+        if [ -n "$APP_PATH" ]; then
+          echo "Found app at: $APP_PATH"
+          cd "$(dirname "$APP_PATH")"
+          zip -r "$GITHUB_WORKSPACE/build/Terracotta.app.zip" "$(basename "$APP_PATH")"
+        else
+          echo "No .app found, checking Products directory"
+          ls -la build/Terracotta.xcarchive/Products/ || true
+          exit 1
+        fi
     
     - name: Upload App Artifact
       uses: actions/upload-artifact@v4
