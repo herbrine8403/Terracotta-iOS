@@ -2,7 +2,7 @@ name: Terracotta
 options:
   bundleIdPrefix: site.yinmo
   deploymentTarget:
-    iOS: 14.5
+    iOS: 15.0
 targets:
   Terracotta:
     type: application

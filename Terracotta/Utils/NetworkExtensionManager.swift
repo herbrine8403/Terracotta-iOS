@@ -219,7 +219,16 @@ class NetworkExtensionManager: ObservableObject {
         }
         
         let messageData = message.data(using: .utf8) ?? Data()
-        vpnManager.connection.sendProviderMessage(messageData, responseHandler: completion)
+        
+        // 检查API可用性
+        if #available(iOS 15.0, *) {
+            vpnManager.connection.sendProviderMessage(messageData) { response in
+                completion(response)
+            }
+        } else {
+            // iOS 14.x fallback - 使用旧API或简单返回
+            completion(nil)
+        }
     }
     
     deinit {

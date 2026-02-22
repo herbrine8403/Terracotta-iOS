@@ -1,6 +1,7 @@
 import SwiftUI
 import TerracottaShared
 
+@available(iOS 15.0, *)
 struct ContentView: View {
     @EnvironmentObject var networkManager: NetworkExtensionManager
     @EnvironmentObject var roomManager: RoomManager
@@ -90,10 +91,13 @@ struct ContentView: View {
                 Spacer()
             }
             .padding()
-            .alert("错误", isPresented: $showingAlert) {
-                Button("确定") { }
-            } message: {
-                Text(alertMessage)
+            // 修复iOS 14.5兼容性问题
+            .alert(isPresented: $showingAlert) {
+                Alert(
+                    title: Text("错误"),
+                    message: Text(alertMessage),
+                    dismissButton: .default(Text("确定"))
+                )
             }
         }
     }
