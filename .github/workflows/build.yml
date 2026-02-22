@@ -30,38 +30,24 @@ jobs:
     - name: Build iOS app
       run: |
         mkdir -p build
-        # First create the archive
-        CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_IDENTITY="" xcodebuild -project Terracotta.xcodeproj -scheme Terracotta -destination 'generic/platform=iOS' -configuration Release archive -archivePath build/Terracotta.xcarchive
+        # Build without code signing for CI testing
+        CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_IDENTITY="" xcodebuild \
+          -project Terracotta.xcodeproj \
+          -scheme Terracotta \
+          -destination 'generic/platform=iOS' \
+          -configuration Release \
+          archive \
+          -archivePath build/Terracotta.xcarchive
     
-    - name: Export IPA
+    - name: Package app for distribution
       run: |
-        # Create export options plist file - use debugging method without signing
-        cat > build/ExportOptions.plist << 'EOF'
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-            <key>method</key>
-            <string>debugging</string>
-            <key>compileBitcode</key>
-            <false/>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>stripSwiftSymbols</key>
-            <true/>
-            <key>teamID</key>
-            <string>PLACEHOLDER</string>
-            <key>thinning</key>
-            <string>&lt;none&gt;</string>
-        </dict>
-        </plist>
-        EOF
-        # Export the archive
-        CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_IDENTITY="" xcodebuild -exportArchive -archivePath build/Terracotta.xcarchive -exportPath build -exportOptionsPlist build/ExportOptions.plist
+        # Create a zip of the .app bundle for testing
+        cd build/Terracotta.xcarchive/Products/Applications
+        zip -r ../../Terracotta.app.zip Terracotta.app
     
-    - name: Upload IPA Artifact
+    - name: Upload App Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Terracotta-IPA
-        path: build/*.ipa
+        name: Terracotta-App
+        path: build/Terracotta.app.zip
         retention-days: 30
