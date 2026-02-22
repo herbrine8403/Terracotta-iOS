@@ -1,6 +1,23 @@
 @preconcurrency import NetworkExtension
 import os
 
+// Terracotta-iOS
+// 
+// Copyright (C) 2026 herbrine8403
+// 
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published
+// by the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+// 
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 public let APP_BUNDLE_ID: String = "site.yinmo.terracotta"
 public let APP_GROUP_ID: String = "group.site.yinmo.terracotta"
 public let ICLOUD_CONTAINER_ID: String = "iCloud.site.yinmo.terracotta"
@@ -60,4 +77,15 @@ public enum ConnectionStatus: String, Codable, CaseIterable {
     case connecting = "connecting"
     case connected = "connected"
     case error = "error"
+}
+
+// 本地化支持扩展
+public extension String {
+    var localized: String {
+        return NSLocalizedString(self, comment: "")
+    }
+    
+    func localizedFormat(_ arguments: CVarArg...) -> String {
+        return String(format: localized, arguments: arguments)
+    }
 }

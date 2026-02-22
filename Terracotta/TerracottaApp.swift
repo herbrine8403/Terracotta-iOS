@@ -7,6 +7,7 @@ struct TerracottaApp: App {
     @StateObject private var networkManager = NetworkExtensionManager()
     @StateObject private var profileStore = ProfileStore()
     @StateObject private var logTailer = LogTailer()
+    @StateObject private var roomManager: RoomManager = RoomManager(networkManager: NetworkExtensionManager())
     
     init() {
         let values: [String: Any] = [
@@ -35,6 +36,7 @@ struct TerracottaApp: App {
                 .environmentObject(networkManager)
                 .environmentObject(profileStore)
                 .environmentObject(logTailer)
+                .environmentObject(roomManager)
         }
         .commands {
             CommandGroup(replacing: .help) {

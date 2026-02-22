@@ -1,139 +1,356 @@
 import NetworkExtension
 import os
 
+// 定义日志记录器
+private let logger = Logger(subsystem: "site.yinmo.terracotta", category: "PacketTunnelProvider")
+
 class PacketTunnelProvider: NEPacketTunnelProvider {
-    private var tunnelFileDescriptor: Int32 = -1
     private var isRunning = false
-    private var errorMessage: String?
+    private var lastAppliedSettings: TunnelNetworkSettingsSnapshot?
+    private var needReapplySettings: Bool = false
+    private var reasserting = false
     
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
-        os_log("Starting Terracotta tunnel", log: OSLog.default, type: .info)
+        logger.info("startTunnel(): triggered")
         
-        // 配置 VPN 隧道
+        // 从共享UserDefaults加载配置
+        guard let defaults = UserDefaults(suiteName: APP_GROUP_ID),
+              let configData = defaults.data(forKey: "VPNConfig") else {
+            logger.error("startTunnel() config is nil")
+            completionHandler("Configuration is not set")
+            return
+        }
+        
+        // 将配置数据转换为字符串
+        guard let configString = String(data: configData, encoding: .utf8) else {
+            logger.error("startTunnel() failed to decode config")
+            completionHandler("Failed to decode configuration")
+            return
+        }
+        
+        // 启动网络实例
+        var errPtr: UnsafePointer<CChar>? = nil
+        let status = configString.withCString { strPtr in
+            return run_network_instance(strPtr, &errPtr)
+        }
+        
+        guard status == 0 else {
+            let err = extractRustString(errPtr)
+            logger.error("startTunnel() failed to run: \(err ?? "Unknown", privacy: .public)")
+            completionHandler(err ?? "Unknown error")
+            return
+        }
+        
+        // 注册回调
+        registerRustStopCallback()
+        registerRunningInfoCallback()
+        
+        // 配置隧道网络设置
         let tunnelNetworkSettings = createTunnelNetworkSettings()
-        setTunnelNetworkSettings(tunnelNetworkSettings) {
-            [weak self] (error) in
+        setTunnelNetworkSettings(tunnelNetworkSettings) { [weak self] (error) in
             guard let self = self else {
-                return
-            }
-            
-            if let error = error {
-                os_log("Failed to set tunnel network settings: %{public}s", log: OSLog.default, type: .error, error.localizedDescription)
                 completionHandler(error)
                 return
             }
             
-            // 启动 EasyTier 网络实例
-            self.startEasyTier {
-                [weak self] (error) in
-                guard let self = self else {
-                    return
-                }
-                
-                if let error = error {
-                    os_log("Failed to start EasyTier: %{public}s", log: OSLog.default, type: .error, error.localizedDescription)
-                    completionHandler(error)
-                    return
-                }
-                
-                self.isRunning = true
-                os_log("Terracotta tunnel started successfully", log: OSLog.default, type: .info)
-                completionHandler(nil)
+            if let error = error {
+                logger.error("startTunnel() failed to set tunnel network settings: \(error.localizedDescription)")
+                completionHandler(error)
+                return
             }
+            
+            self.isRunning = true
+            logger.info("Terracotta tunnel started successfully")
+            completionHandler(nil)
         }
     }
     
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-        os_log("Stopping Terracotta tunnel", log: OSLog.default, type: .info)
+        logger.info("stopTunnel(): reason=\(reason.rawValue, privacy: .public)")
         
-        // 停止 EasyTier 网络实例
-        stopEasyTier {
-            [weak self] in
-            guard let self = self else {
-                completionHandler()
-                return
-            }
-            
-            self.isRunning = false
-            os_log("Terracotta tunnel stopped successfully", log: OSLog.default, type: .info)
-            completionHandler()
+        let status = stop_network_instance()
+        if status != 0 {
+            logger.error("stopTunnel() failed")
         }
+        
+        isRunning = false
+        completionHandler()
     }
     
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
-        // 处理来自主应用的消息
-        os_log("Received app message: %{public}s", log: OSLog.default, type: .info, messageData.count)
+        logger.debug("handleAppMessage(): received \(messageData.count) bytes")
         
-        if let completionHandler = completionHandler {
-            let response = "Message received".data(using: .utf8)
-            completionHandler(response)
+        guard let completionHandler = completionHandler else { return }
+        
+        if let raw = String(data: messageData, encoding: .utf8),
+           let command = ProviderCommand(rawValue: raw) {
+            switch command {
+            case .runningInfo:
+                var infoPtr: UnsafePointer<CChar>? = nil
+                var errPtr: UnsafePointer<CChar>? = nil
+                if get_running_info(&infoPtr, &errPtr) == 0,
+                   let info = extractRustString(infoPtr) {
+                    completionHandler(info.data(using: .utf8))
+                } else if let err = extractRustString(errPtr) {
+                    logger.error("handleAppMessage() failed: \(err, privacy: .public)")
+                    completionHandler(nil)
+                } else {
+                    completionHandler(nil)
+                }
+            case .lastNetworkSettings:
+                guard let lastAppliedSettings = lastAppliedSettings else {
+                    completionHandler(nil)
+                    return
+                }
+                do {
+                    let data = try JSONEncoder().encode(lastAppliedSettings)
+                    completionHandler(data)
+                } catch {
+                    logger.error("handleAppMessage() encode settings failed: \(error, privacy: .public)")
+                    completionHandler(nil)
+                }
+            default:
+                // 对于其他命令，返回简单的确认消息
+                let response = "Message received".data(using: .utf8)
+                completionHandler(response)
+            }
+            return
         }
+        
+        // 对于未知消息，返回确认
+        let response = "Message received".data(using: .utf8)
+        completionHandler(response)
     }
     
     private func createTunnelNetworkSettings() -> NEPacketTunnelNetworkSettings {
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
         
-        // 配置 IPv4 设置
+        // IPv4 设置
         let ipv4Settings = NEIPv4Settings(addresses: ["10.0.0.2"], subnetMasks: ["255.255.255.0"])
         ipv4Settings.includedRoutes = [NEIPv4Route.default()]
-        ipv4Settings.excludedRoutes = []
         settings.ipv4Settings = ipv4Settings
         
-        // 配置 DNS 设置
-        let dnsSettings = NEDNSSettings(servers: ["8.8.8.8", "8.8.4.4"])
-        dnsSettings.searchDomains = []
+        // IPv6 设置 (可选)
+        let ipv6Settings = NEIPv6Settings(addresses: ["fd42:4242:4242::2"], networkPrefixLength: 64)
+        ipv6Settings.includedRoutes = [NEIPv6Route.default()]
+        settings.ipv6Settings = ipv6Settings
+        
+        // DNS 设置
+        let dnsSettings = NEDNSSettings(servers: ["1.1.1.1", "8.8.8.8"])
         settings.dnsSettings = dnsSettings
         
-        // 配置 MTU
-        settings.mtu = 1500
+        // MTU 设置
+        settings.mtu = 1380  // 使用较小的MTU避免分片问题
         
         return settings
     }
     
-    private func startEasyTier(completionHandler: @escaping (Error?) -> Void) {
-        // 读取配置
-        guard let config = loadConfig() else {
-            let error = NSError(domain: "TerracottaErrorDomain", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to load config"])
-            completionHandler(error)
+    private func registerRustStopCallback() {
+        // 注册Rust停止回调
+        let rustStopCallback: @convention(c) () -> Void = { [weak self] in
+            self?.handleRustStop()
+        }
+        var regErrPtr: UnsafePointer<CChar>? = nil
+        let regRet = register_stop_callback(rustStopCallback, &regErrPtr)
+        if regRet != 0 {
+            let regErr = extractRustString(regErrPtr)
+            logger.error("registerRustStopCallback() failed: \(regErr ?? "Unknown", privacy: .public)")
+        } else {
+            logger.info("registerRustStopCallback() registered")
+        }
+    }
+    
+    private func registerRunningInfoCallback() {
+        // 注册运行信息回调
+        let infoChangedCallback: @convention(c) () -> Void = { [weak self] in
+            self?.handleRunningInfoChanged()
+        }
+        var errPtr: UnsafePointer<CChar>? = nil
+        let ret = register_running_info_callback(infoChangedCallback, &errPtr)
+        if ret != 0 {
+            let err = extractRustString(errPtr)
+            logger.error("registerRunningInfoCallback() failed: \(err ?? "Unknown", privacy: .public)")
+        } else {
+            logger.info("registerRunningInfoCallback() registered")
+        }
+    }
+    
+    private func handleRustStop() {
+        // 处理由Rust层触发的停止事件
+        logger.error("handleRustStop(): triggered from Rust layer")
+        
+        var msgPtr: UnsafePointer<CChar>? = nil
+        var errPtr: UnsafePointer<CChar>? = nil
+        let ret = get_latest_error_msg(&msgPtr, &errPtr)
+        if ret == 0, let msg = extractRustString(msgPtr) {
+            logger.error("handleRustStop(): \(msg, privacy: .public)")
+            // 在主线程上取消隧道
+            DispatchQueue.main.async {
+                self.cancelTunnelWithError(NSError(domain: "TerracottaError", code: 999, userInfo: [NSLocalizedDescriptionKey: msg]))
+            }
+        } else if let err = extractRustString(errPtr) {
+            logger.error("handleRustStop() failed to get latest error: \(err, privacy: .public)")
+            DispatchQueue.main.async {
+                self.cancelTunnelWithError(NSError(domain: "TerracottaError", code: 998, userInfo: [NSLocalizedDescriptionKey: err]))
+            }
+        }
+    }
+    
+    private func handleRunningInfoChanged() {
+        logger.info("handleRunningInfoChanged(): triggered")
+        // 可以在此处更新网络设置
+        enqueueSettingsUpdate()
+    }
+    
+    private func enqueueSettingsUpdate() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if self.reasserting {
+                logger.info("enqueueSettingsUpdate() update in progress, waiting")
+                self.needReapplySettings = true
+                return
+            }
+            logger.info("enqueueSettingsUpdate() starting settings update")
+            self.applyNetworkSettings() { error in
+                guard let error = error else { return }
+                logger.info("enqueueSettingsUpdate() failed with error: \(error)")
+            }
+        }
+    }
+    
+    private func applyNetworkSettings(_ completion: @escaping ((any Error)?) -> Void) {
+        guard !reasserting else {
+            logger.error("applyNetworkSettings() still in progress")
+            completion("still in progress")
             return
         }
         
-        // 调用 FFI 函数启动网络实例
-        var errMsg: UnsafePointer<CChar>? = nil
-        let status = run_network_instance(config, &errMsg)
+        reasserting = true
+        Thread.sleep(forTimeInterval: 0.5) // 0.5秒延迟
+        needReapplySettings = false
         
-        if status == 0 {
-            completionHandler(nil)
-        } else if let errMsg = errMsg {
-            let errorMessage = String(cString: errMsg)
-            let error = NSError(domain: "TerracottaErrorDomain", code: 2, userInfo: [NSLocalizedDescriptionKey: errorMessage])
-            completionHandler(error)
-        } else {
-            let error = NSError(domain: "TerracottaErrorDomain", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to start network instance"])
-            completionHandler(error)
+        // 创建新的网络设置
+        let settings = createTunnelNetworkSettings()
+        let newSnapshot = snapshotSettings(settings)
+        let wrappedCompletion: (Error?) -> Void = { [weak self] error in
+            DispatchQueue.main.async {
+                guard let self = self else {
+                    completion(error as? any Error)
+                    return
+                }
+                
+                if error == nil {
+                    self.lastAppliedSettings = newSnapshot
+                }
+                
+                completion(error as? any Error)
+                self.reasserting = false
+                if self.needReapplySettings {
+                    self.needReapplySettings = false
+                    self.applyNetworkSettings(completion)
+                }
+            }
+        }
+        
+        if newSnapshot == lastAppliedSettings {
+            logger.warning("applyNetworkSettings() new settings are exactly the same as last applied, skipping")
+            wrappedCompletion(nil)
+            return
+        }
+        
+        logger.info("applyNetworkSettings() applying settings")
+        setTunnelNetworkSettings(settings) { [weak self] error in
+            guard let self = self else {
+                wrappedCompletion(error)
+                return
+            }
+            
+            if let error {
+                logger.error("applyNetworkSettings() failed to setTunnelNetworkSettings: \(error, privacy: .public)")
+                wrappedCompletion(error)
+                return
+            }
+            
+            // 检查是否需要设置TUN FD
+            let tunFd = self.packetFlow.value(forKeyPath: "socket.fileDescriptor") as? Int32 ?? self.tunnelFileDescriptor()
+            if let tunFd {
+                var errPtr: UnsafePointer<CChar>? = nil
+                let ret = set_tun_fd(tunFd, &errPtr)
+                guard ret == 0 else {
+                    let err = extractRustString(errPtr)
+                    logger.error("applyNetworkSettings() failed to set tun fd to \(tunFd): \(err, privacy: .public)")
+                    wrappedCompletion(NSError(domain: "TerracottaError", code: 997, userInfo: [NSLocalizedDescriptionKey: err ?? "Failed to set TUN fd"]))
+                    return
+                }
+            } else {
+                logger.error("applyNetworkSettings() no available tun fd")
+            }
+            
+            logger.info("applyNetworkSettings() settings applied")
+            wrappedCompletion(nil)
         }
     }
     
-    private func stopEasyTier(completionHandler: @escaping () -> Void) {
-        // 调用 FFI 函数停止网络实例
-        let status = stop_network_instance()
-        
-        if status == 0 {
-            os_log("EasyTier stopped successfully", log: OSLog.default, type: .info)
-        } else {
-            os_log("Failed to stop EasyTier", log: OSLog.default, type: .error)
-        }
-        
-        completionHandler()
-    }
-    
-    private func loadConfig() -> UnsafePointer<CChar>? {
-        // 从 UserDefaults 加载配置
-        guard let userDefaults = UserDefaults(suiteName: APP_GROUP_ID) else {
+    private func tunnelFileDescriptor() -> Int32? {
+        // 获取TUN接口的文件描述符
+        guard let tunInterface = self.networkSettings?.ipv4Settings?.addresses?.first else {
             return nil
         }
         
-        let configString = userDefaults.string(forKey: "config") ?? ""
-        return strdup(configString)
+        // 尝试通过packetFlow获取TUN文件描述符
+        if let fileDescriptor = self.packetFlow.value(forKeyPath: "socket.fileDescriptor") as? Int32 {
+            return fileDescriptor
+        }
+        
+        return nil
+    }
+    
+    private func extractRustString(_ ptr: UnsafePointer<CChar>?) -> String? {
+        guard let ptr = ptr else { return nil }
+        let str = String(cString: ptr)
+        // 释放Rust分配的字符串
+        free(UnsafeMutableRawPointer(mutating: ptr))
+        return str
+    }
+    
+    // 这个辅助结构体用于比较网络设置
+    struct TunnelNetworkSettingsSnapshot: Equatable {
+        let ipv4Addresses: [String]
+        let ipv6Addresses: [String]
+        let dnsServers: [String]
+        let mtu: Int
+    }
+    
+    private func snapshotSettings(_ settings: NEPacketTunnelNetworkSettings) -> TunnelNetworkSettingsSnapshot {
+        let ipv4Addresses = settings.ipv4Settings?.addresses ?? []
+        let ipv6Addresses = settings.ipv6Settings?.addresses ?? []
+        let dnsServers = settings.dnsSettings?.servers ?? []
+        let mtu = settings.mtu?.intValue ?? 1500
+        
+        return TunnelNetworkSettingsSnapshot(
+            ipv4Addresses: ipv4Addresses,
+            ipv6Addresses: ipv6Addresses,
+            dnsServers: dnsServers,
+            mtu: mtu
+        )
+    }
+    
+    override func sleep(completionHandler: @escaping () -> Void) {
+        logger.info("sleep(): called")
+        completionHandler()
+    }
+    
+    override func wake() {
+        logger.info("wake(): called")
     }
 }
+
+// 定义命令枚举
+enum ProviderCommand: String {
+    case runningInfo = "runningInfo"
+    case lastNetworkSettings = "lastNetworkSettings"
+    case exportOSLog = "exportOSLog"  // 添加日志导出命令
+}
+
+// 错误扩展
+extension String: @retroactive Error {}

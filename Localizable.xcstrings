@@ -1,0 +1,255 @@
+{
+  "APP_NAME" : {
+    "comment" : "应用名称",
+    "localizations" : {
+      "en" : {
+        "string" : "Terracotta"
+      },
+      "zh-Hans" : {
+        "string" : "陶瓦联机"
+      }
+    }
+  },
+  "CONNECT" : {
+    "comment" : "连接按钮文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Connect"
+      },
+      "zh-Hans" : {
+        "string" : "连接"
+      }
+    }
+  },
+  "DISCONNECT" : {
+    "comment" : "断开连接按钮文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Disconnect"
+      },
+      "zh-Hans" : {
+        "string" : "断开连接"
+      }
+    }
+  },
+  "CREATE_ROOM" : {
+    "comment" : "创建房间按钮文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Create Room"
+      },
+      "zh-Hans" : {
+        "string" : "创建房间"
+      }
+    }
+  },
+  "JOIN_ROOM" : {
+    "comment" : "加入房间按钮文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Join Room"
+      },
+      "zh-Hans" : {
+        "string" : "加入房间"
+      }
+    }
+  },
+  "ROOM_CODE" : {
+    "comment" : "房间代码提示文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Room Code"
+      },
+      "zh-Hans" : {
+        "string" : "房间代码"
+      }
+    }
+  },
+  "ROOM_NAME" : {
+    "comment" : "房间名称提示文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Room Name"
+      },
+      "zh-Hans" : {
+        "string" : "房间名称"
+      }
+    }
+  },
+  "STATUS_CONNECTED" : {
+    "comment" : "连接状态文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Connected"
+      },
+      "zh-Hans" : {
+        "string" : "已连接"
+      }
+    }
+  },
+  "STATUS_CONNECTING" : {
+    "comment" : "连接中状态文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Connecting"
+      },
+      "zh-Hans" : {
+        "string" : "连接中"
+      }
+    }
+  },
+  "STATUS_DISCONNECTED" : {
+    "comment" : "断开连接状态文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Disconnected"
+      },
+      "zh-Hans" : {
+        "string" : "已断开"
+      }
+    }
+  },
+  "STATUS_ERROR" : {
+    "comment" : "错误状态文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Error"
+      },
+      "zh-Hans" : {
+        "string" : "错误"
+      }
+    }
+  },
+  "LOGS_TITLE" : {
+    "comment" : "日志标题",
+    "localizations" : {
+      "en" : {
+        "string" : "Logs"
+      },
+      "zh-Hans" : {
+        "string" : "日志"
+      }
+    }
+  },
+  "SETTINGS_TITLE" : {
+    "comment" : "设置标题",
+    "localizations" : {
+      "en" : {
+        "string" : "Settings"
+      },
+      "zh-Hans" : {
+        "string" : "设置"
+      }
+    }
+  },
+  "PROFILES_TITLE" : {
+    "comment" : "配置文件标题",
+    "localizations" : {
+      "en" : {
+        "string" : "Profiles"
+      },
+      "zh-Hans" : {
+        "string" : "配置文件"
+      }
+    }
+  },
+  "CLEAR_LOGS" : {
+    "comment" : "清除日志按钮文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Clear Logs"
+      },
+      "zh-Hans" : {
+        "string" : "清除日志"
+      }
+    }
+  },
+  "EXPORT_LOGS" : {
+    "comment" : "导出日志按钮文本",
+    "localizations" : {
+      "en" : {
+        "string" : "Export Logs"
+      },
+      "zh-Hans" : {
+        "string" : "导出日志"
+      }
+    }
+  },
+  "VPN_PERMISSION_TITLE" : {
+    "comment" : "VPN权限请求标题",
+    "localizations" : {
+      "en" : {
+        "string" : "VPN Permission Required"
+      },
+      "zh-Hans" : {
+        "string" : "需要VPN权限"
+      }
+    }
+  },
+  "VPN_PERMISSION_MESSAGE" : {
+    "comment" : "VPN权限请求消息",
+    "localizations" : {
+      "en" : {
+        "string" : "Please allow VPN configuration to use Terracotta."
+      },
+      "zh-Hans" : {
+        "string" : "请允许VPN配置以使用陶瓦联机。"
+      }
+    }
+  },
+  "ERROR_CREATING_ROOM" : {
+    "comment" : "创建房间错误消息",
+    "localizations" : {
+      "en" : {
+        "string" : "Error creating room: %@"
+      },
+      "zh-Hans" : {
+        "string" : "创建房间错误: %@"
+      }
+    }
+  },
+  "ERROR_JOINING_ROOM" : {
+    "comment" : "加入房间错误消息",
+    "localizations" : {
+      "en" : {
+        "string" : "Error joining room: %@"
+      },
+      "zh-Hans" : {
+        "string" : "加入房间错误: %@"
+      }
+    }
+  },
+  "ROOM_CREATED_SUCCESS" : {
+    "comment" : "房间创建成功消息",
+    "localizations" : {
+      "en" : {
+        "string" : "Room created successfully: %@"
+      },
+      "zh-Hans" : {
+        "string" : "房间创建成功: %@"
+      }
+    }
+  },
+  "ROOM_JOINED_SUCCESS" : {
+    "comment" : "房间加入成功消息",
+    "localizations" : {
+      "en" : {
+        "string" : "Successfully joined room"
+      },
+      "zh-Hans" : {
+        "string" : "成功加入房间"
+      }
+    }
+  },
+  "INVALID_ROOM_CODE" : {
+    "comment" : "无效房间代码消息",
+    "localizations" : {
+      "en" : {
+        "string" : "Invalid room code"
+      },
+      "zh-Hans" : {
+        "string" : "无效的房间代码"
+      }
+    }
+  }
+}

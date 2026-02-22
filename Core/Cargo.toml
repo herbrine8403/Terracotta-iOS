@@ -8,9 +8,10 @@ crate-type = ["staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
-easytier = { git = "https://github.com/EasyTier/EasyTier.git" }
+easytier = { git = "https://github.com/EasyTier/EasyTier.git", rev = "main" }
 tokio = { version = "1.35", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
