@@ -65,7 +65,14 @@ class RoomManager: ObservableObject {
                         
                         // 启动VPN连接
                         let options = TerracottaOptions(
-                            config: self.generateConfigForRoom(roomInfo)
+                            config: self.generateConfigForRoom(roomInfo),
+                            ipv4: nil,
+                            ipv6: nil,
+                            mtu: nil,
+                            routes: [],
+                            logLevel: .info,
+                            magicDNS: false,
+                            dns: []
                         )
                         
                         self.networkManager.startVPN(options: options)

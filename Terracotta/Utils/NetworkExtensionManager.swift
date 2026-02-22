@@ -220,15 +220,9 @@ class NetworkExtensionManager: ObservableObject {
         
         let messageData = message.data(using: .utf8) ?? Data()
         
-        // 使用兼容的API
-        if #available(iOS 15.0, *) {
-            vpnManager.connection.sendProviderMessage(messageData) { response in
-                completion(response)
-            }
-        } else {
-            // 在iOS 14.x中，Network Extension的消息发送机制不同
-            // 我们暂时返回nil作为fallback
-            completion(nil)
+        // 使用正确的方法发送消息到网络扩展
+        vpnManager.connection.sendProviderMessage(messageData) { response in
+            completion(response)
         }
     }
     
