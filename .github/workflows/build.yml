@@ -29,9 +29,11 @@ jobs:
     
     - name: Build iOS app
       run: |
-        CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_IDENTITY="" xcodebuild -project Terracotta.xcodeproj -scheme Terracotta -destination 'generic/platform=iOS' -configuration Release build
+        mkdir -p build
+        # First create the archive
+        CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_IDENTITY="" xcodebuild -project Terracotta.xcodeproj -scheme Terracotta -destination 'generic/platform=iOS' -configuration Release archive -archivePath build/Terracotta.xcarchive
     
     - name: Export IPA
       run: |
-        mkdir -p build
-        CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_IDENTITY="" xcodebuild -project Terracotta.xcodeproj -scheme Terracotta -destination 'generic/platform=iOS' -configuration Release -exportArchive -archivePath build/Terracotta.xcarchive -exportPath build -exportOptionsPlist <(echo '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>development</string><key>teamID</key><string></string><key>signingStyle</key><string>automatic</string><key>compileBitcode</key><false/></dict></plist>')
+        # Export the archive (no -scheme flag needed for exportArchive)
+        CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGNING_IDENTITY="" xcodebuild -exportArchive -archivePath build/Terracotta.xcarchive -exportPath build -exportOptionsPlist <(echo '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>development</string><key>teamID</key><string></string><key>signingStyle</key><string>automatic</string><key>compileBitcode</key><false/></dict></plist>')
