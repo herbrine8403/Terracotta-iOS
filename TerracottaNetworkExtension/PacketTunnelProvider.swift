@@ -78,48 +78,72 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
     
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
-        logger.debug("handleAppMessage(): received \(messageData.count) bytes")
+        // 处理来自主应用的消息
+        os_log("Received app message: %{public}s", log: OSLog.default, type: .info, messageData.count)
         
-        guard let completionHandler = completionHandler else { return }
-        
-        if let raw = String(data: messageData, encoding: .utf8),
-           let command = ProviderCommand(rawValue: raw) {
-            switch command {
-            case .runningInfo:
-                var infoPtr: UnsafePointer<CChar>? = nil
-                var errPtr: UnsafePointer<CChar>? = nil
-                if get_running_info(&infoPtr, &errPtr) == 0,
-                   let info = extractRustString(infoPtr) {
-                    completionHandler(info.data(using: .utf8))
-                } else if let err = extractRustString(errPtr) {
-                    logger.error("handleAppMessage() failed: \(err, privacy: .public)")
-                    completionHandler(nil)
+        if let messageString = String(data: messageData, encoding: .utf8) {
+            if messageString.hasPrefix("CREATE_ROOM:") {
+                let roomName = String(messageString.dropFirst(12)) // Remove "CREATE_ROOM:" prefix
+                var resultPtr: UnsafePointer<CChar>?
+                var errPtr: UnsafePointer<CChar>?
+                
+                let roomNameCString = roomName.cString(using: .utf8)!
+                let status = create_room(roomNameCString, &errPtr, &resultPtr)
+                
+                if status == 0, let resultPtr = resultPtr {
+                    let roomCode = String(cString: resultPtr)
+                    free(UnsafeMutableRawPointer(mutating: resultPtr))
+                    
+                    os_log("Successfully created room: %{public}s", log: OSLog.default, type: .info, roomCode)
+                    let response = roomCode.data(using: .utf8)
+                    completionHandler?(response)
+                } else if let errPtr = errPtr {
+                    let errorStr = String(cString: errPtr)
+                    free(UnsafeMutableRawPointer(mutating: errPtr))
+                    
+                    os_log("Failed to create room: %{public}s", log: OSLog.default, type: .error, errorStr)
+                    let response = "ERROR:\(errorStr)".data(using: .utf8)
+                    completionHandler?(response)
                 } else {
-                    completionHandler(nil)
+                    let errorStr = "Unknown error occurred while creating room"
+                    os_log("Failed to create room: %{public}s", log: OSLog.default, type: .error, errorStr)
+                    let response = "ERROR:\(errorStr)".data(using: .utf8)
+                    completionHandler?(response)
                 }
-            case .lastNetworkSettings:
-                guard let lastAppliedSettings = lastAppliedSettings else {
-                    completionHandler(nil)
-                    return
+            } else if messageString.hasPrefix("JOIN_ROOM:") {
+                let roomCode = String(messageString.dropFirst(10)) // Remove "JOIN_ROOM:" prefix
+                var errPtr: UnsafePointer<CChar>?
+                
+                let roomCodeCString = roomCode.cString(using: .utf8)!
+                let status = join_room(roomCodeCString, &errPtr)
+                
+                if status == 0 {
+                    os_log("Successfully joined room: %{public}s", log: OSLog.default, type: .info, roomCode)
+                    let response = "SUCCESS".data(using: .utf8)
+                    completionHandler?(response)
+                } else if let errPtr = errPtr {
+                    let errorStr = String(cString: errPtr)
+                    free(UnsafeMutableRawPointer(mutating: errPtr))
+                    
+                    os_log("Failed to join room: %{public}s", log: OSLog.default, type: .error, errorStr)
+                    let response = "ERROR:\(errorStr)".data(using: .utf8)
+                    completionHandler?(response)
+                } else {
+                    let errorStr = "Unknown error occurred while joining room"
+                    os_log("Failed to join room: %{public}s", log: OSLog.default, type: .error, errorStr)
+                    let response = "ERROR:\(errorStr)".data(using: .utf8)
+                    completionHandler?(response)
                 }
-                do {
-                    let data = try JSONEncoder().encode(lastAppliedSettings)
-                    completionHandler(data)
-                } catch {
-                    logger.error("handleAppMessage() encode settings failed: \(error, privacy: .public)")
-                    completionHandler(nil)
-                }
-            default:
-                // 对于其他命令，返回简单的确认消息
+            } else {
+                // 旧的处理方式
+                os_log("Received unknown message type", log: OSLog.default, type: .error)
                 let response = "Message received".data(using: .utf8)
-                completionHandler(response)
+                completionHandler?(response)
             }
-            return
+        } else {
+            let response = "Message received".data(using: .utf8)
+            completionHandler?(response)
         }
-        
-        // 对于未知消息，返回确认
-        let response = "Message received".data(using: .utf8)
-        completionHandler(response)
     }
     
     private func createTunnelNetworkSettings() -> NEPacketTunnelNetworkSettings {
