@@ -32,11 +32,11 @@ class RoomManager: ObservableObject {
         if let defaults = UserDefaults(suiteName: APP_GROUP_ID) {
             let options = TerracottaOptions(
                 config: config,
-                ipv4: nil,
-                ipv6: nil,
+                ipv4: "10.14.0.1/16",  // 提供默认的IPv4配置
+                ipv6: "fd42:4242:4242::1/64",  // 提供默认的IPv6配置
                 mtu: 1380,
                 routes: [],
-                logLevel: .info,
+                logLevel: LogLevel.info,
                 magicDNS: true,
                 dns: ["1.1.1.1", "8.8.8.8"]
             )
@@ -79,11 +79,11 @@ class RoomManager: ObservableObject {
             
             let options = TerracottaOptions(
                 config: config,
-                ipv4: nil,
-                ipv6: nil,
+                ipv4: "10.14.0.2/16",  // 提供默认的IPv4配置
+                ipv6: "fd42:4242:4242::2/64",  // 提供默认的IPv6配置
                 mtu: 1380,
                 routes: [],
-                logLevel: .info,
+                logLevel: LogLevel.info,
                 magicDNS: true,
                 dns: ["1.1.1.1", "8.8.8.8"]
             )

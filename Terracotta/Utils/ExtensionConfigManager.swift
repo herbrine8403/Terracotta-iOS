@@ -15,13 +15,14 @@ class ExtensionConfigManager {
         
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
         
-        // 设置默认值
-        let ipv4Settings = NEIPv4Settings(addresses: ["10.0.0.2"], subnetMasks: ["255.255.255.0"])
+        // IPv4 设置
+        // 使用固定的IPv4地址配置
+        let ipv4Settings = NEIPv4Settings(addresses: ["10.14.0.2"], subnetMasks: ["255.255.0.0"])
         ipv4Settings.includedRoutes = [NEIPv4Route.default()]
         settings.ipv4Settings = ipv4Settings
         
         // IPv6 设置 (可选)
-        let ipv6Settings = NEIPv6Settings(addresses: ["fd42:4242:4242::2"], networkPrefixLength: 64)
+        let ipv6Settings = NEIPv6Settings(addresses: ["fd42:4242:4242::2"], networkPrefixLengths: [64])
         ipv6Settings.includedRoutes = [NEIPv6Route.default()]
         settings.ipv6Settings = ipv6Settings
         

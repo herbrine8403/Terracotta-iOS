@@ -209,57 +209,53 @@ class NetworkExtensionManager: ObservableObject {
             return
         }
         
-        let message = "runningInfo".data(using: .utf8) ?? Data()
-        vpnManager.connection.sendProviderMessage(message) { [weak self] response in
-            if let responseData = response as? Data,
-               let responseString = String(data: responseData, encoding: .utf8) {
-                self?.logger.info("Received running info: \(responseString)")
-                // 在这里可以解析运行信息并更新UI
-            }
+        // 通过共享UserDefaults和Darwin通知与网络扩展通信
+        if let defaults = UserDefaults(suiteName: APP_GROUP_ID) {
+            defaults.set("runningInfo", forKey: "VPNMessageToExtension")
+            defaults.synchronize()
+            
+            // 发送 Darwin 通知以提醒扩展检查新消息
+            CFNotificationCenterPostNotification(
+                CFNotificationCenterGetDarwinNotifyCenter(),
+                CFNotificationName("com.terracotta.networkextension.message" as CFString),
+                nil,
+                nil,
+                true
+            )
         }
     }
     
-    // 发送消息到VPN扩展
     func sendMessage(_ message: String, completion: @escaping (Data?) -> Void) {
-        // 检查iOS版本是否支持sendProviderMessage
-        if #available(iOS 15.1, *) {
-            // 在iOS 15.1+上使用sendProviderMessage
-            guard let vpnManager = vpnManager,
-                  vpnManager.connection.status == .connected else {
-                logger.error("VPN is not connected")
-                completion(nil)
-                return
-            }
+        // 使用 Darwin Notification 进行 App 和 Network Extension 之间的通信
+        guard let vpnManager = vpnManager else {
+            completion(nil)
+            return
+        }
+        
+        // 将消息保存到共享UserDefaults，网络扩展会定期检查
+        if let defaults = UserDefaults(suiteName: APP_GROUP_ID) {
+            defaults.set(message, forKey: "VPNMessageToExtension")
+            defaults.synchronize()
             
-            let messageData = message.data(using: .utf8) ?? Data()
-            vpnManager.connection.sendProviderMessage(messageData) { response in
-                completion(response as? Data)
-            }
-        } else {
-            // 对于较早的iOS版本，使用其他机制
-            // 这里使用UserDefaults作为消息队列
-            logger.info("Using alternative message system for iOS < 15.1")
+            // 发送 Darwin 通知以提醒扩展检查新消息
+            CFNotificationCenterPostNotification(
+                CFNotificationCenterGetDarwinNotifyCenter(),
+                CFNotificationName("com.terracotta.networkextension.message" as CFString),
+                nil,
+                nil,
+                true
+            )
             
-            // 使用UserDefaults作为消息队列
-            DispatchQueue.global(qos: .background).async {
-                let queueKey = "MessageQueue"
-                let queueData = UserDefaults.standard.array(forKey: queueKey) as? [String] ?? []
-                var newQueue = queueData
-                newQueue.append(message)
-                
-                UserDefaults.standard.set(newQueue, forKey: queueKey)
-                
-                // 等待响应
-                DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-                    let responseQueue = UserDefaults.standard.array(forKey: "ResponseQueue") as? [String] ?? []
-                    if let response = responseQueue.first {
-                        UserDefaults.standard.set(Array(responseQueue.dropFirst()), forKey: "ResponseQueue")
-                        completion(response.data(using: .utf8))
-                    } else {
-                        completion(nil)
-                    }
+            // 模拟响应 - 网络扩展会将响应写入另一个键
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { // 2秒超时
+                if let response = defaults.string(forKey: "VPNMessageFromExtension") {
+                    completion(response.data(using: .utf8))
+                } else {
+                    completion(nil)
                 }
             }
+        } else {
+            completion(nil)
         }
     }
     

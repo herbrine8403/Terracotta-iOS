@@ -14,7 +14,7 @@ class CompatibilityChecker {
     /// 检查基本功能
     private static func checkBasicFeatures() -> Bool {
         // 检查是否支持基本的VPN功能
-        let supportsTunnelProvider = (NETunnelProviderManager.self as Any) is NETunnelProviderManager.Type
+        let supportsTunnelProvider = NETunnelProviderManager.self != nil
         let supportsAppGroup = UserDefaults(suiteName: APP_GROUP_ID) != nil
         
         return supportsTunnelProvider && supportsAppGroup
