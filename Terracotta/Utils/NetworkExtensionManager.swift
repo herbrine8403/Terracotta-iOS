@@ -218,9 +218,16 @@ class NetworkExtensionManager: ObservableObject {
             return
         }
         
+        // 检查VPN连接状态
+        guard vpnManager.connection.status == .connected || vpnManager.connection.status == .connecting else {
+            print("VPN is not active. Status: \(vpnManager.connection.status)")
+            completion(nil)
+            return
+        }
+        
         let messageData = message.data(using: .utf8) ?? Data()
         
-        // 使用正确的方法发送消息到网络扩展
+        // 使用API发送消息到网络扩展
         vpnManager.connection.sendProviderMessage(messageData) { response in
             completion(response)
         }
