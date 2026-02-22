@@ -83,8 +83,7 @@ class RoomManager: ObservableObject {
                     
                     // 启动VPN连接
                     let options = TerracottaOptions(
-                        config: self.generateConfigForRoom(roomInfo),
-                        logLevel: .info
+                        config: self.generateConfigForRoom(roomInfo)
                     )
                     
                     self.networkManager.startVPN(options: options)
