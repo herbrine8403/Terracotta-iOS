@@ -10,10 +10,12 @@ class RoomManager: ObservableObject {
     @Published var errorMessage: String?
     
     private let networkManager: NetworkExtensionManager
+    private let ffiWrapper: FFIWrapper
     private let logger = Logger(subsystem: "site.yinmo.terracotta", category: "RoomManager")
     
     init(networkManager: NetworkExtensionManager) {
         self.networkManager = networkManager
+        self.ffiWrapper = FFIWrapper(networkManager: networkManager)
     }
     
     func createRoom(name: String, completion: @escaping (Result<String, Error>) -> Void) {
@@ -21,41 +23,25 @@ class RoomManager: ObservableObject {
         isCreatingRoom = true
         errorMessage = nil
         
-        // 调用Rust库创建房间
-        let roomNameCString = name.cString(using: .utf8)!
-        var resultPtr: UnsafePointer<CChar>?
-        var errPtr: UnsafePointer<CChar>?
-        
-        let status = create_room(roomNameCString, &errPtr, &resultPtr)
-        
-        DispatchQueue.main.async {
-            defer {
-                self.isCreatingRoom = false
-            }
-            
-            if status == 0, let resultPtr = resultPtr {
-                let roomCode = String(cString: resultPtr)
-                // 释放Rust分配的字符串
-                free(UnsafeMutableRawPointer(mutating: resultPtr))
+        ffiWrapper.createRoom(roomName: name) { result in
+            DispatchQueue.main.async {
+                defer {
+                    self.isCreatingRoom = false
+                }
                 
-                // 创建房间信息
-                let roomInfo = RoomInfo(code: roomCode, name: name)
-                self.currentRoom = roomInfo
-                
-                self.logger.info("Successfully created room: \(roomCode)")
-                completion(.success(roomCode))
-            } else if let errPtr = errPtr {
-                let errorStr = String(cString: errPtr)
-                free(UnsafeMutableRawPointer(mutating: errPtr))
-                
-                self.errorMessage = errorStr
-                self.logger.error("Failed to create room: \(errorStr)")
-                completion(.failure(NSError(domain: "RoomManagerError", code: 1, userInfo: [NSLocalizedDescriptionKey: errorStr])))
-            } else {
-                let errorStr = "Unknown error occurred while creating room"
-                self.errorMessage = errorStr
-                self.logger.error("Failed to create room: \(errorStr)")
-                completion(.failure(NSError(domain: "RoomManagerError", code: 1, userInfo: [NSLocalizedDescriptionKey: errorStr])))
+                switch result {
+                case .success(let roomCode):
+                    // 创建房间信息
+                    let roomInfo = RoomInfo(code: roomCode, name: name)
+                    self.currentRoom = roomInfo
+                    
+                    self.logger.info("Successfully created room: \(roomCode)")
+                    completion(.success(roomCode))
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                    self.logger.error("Failed to create room: \(error.localizedDescription)")
+                    completion(.failure(error))
+                }
             }
         }
     }
@@ -65,47 +51,36 @@ class RoomManager: ObservableObject {
         isJoiningRoom = true
         errorMessage = nil
         
-        // 调用Rust库加入房间
-        let roomCodeCString = code.cString(using: .utf8)!
-        var errPtr: UnsafePointer<CChar>?
-        
-        let status = join_room(roomCodeCString, &errPtr)
-        
-        DispatchQueue.main.async {
-            defer {
-                self.isJoiningRoom = false
-            }
-            
-            if status == 0 {
-                // 解析房间代码获取网络配置信息
-                if let roomInfo = self.parseRoomCode(code) {
-                    self.currentRoom = roomInfo
-                    
-                    // 启动VPN连接
-                    let options = TerracottaOptions(
-                        config: self.generateConfigForRoom(roomInfo)
-                    )
-                    
-                    self.networkManager.startVPN(options: options)
-                    completion(.success(()))
-                } else {
-                    let errorStr = "Invalid room code format"
-                    self.errorMessage = errorStr
-                    self.logger.error("Failed to parse room code: \(errorStr)")
-                    completion(.failure(NSError(domain: "RoomManagerError", code: 2, userInfo: [NSLocalizedDescriptionKey: errorStr])))
+        ffiWrapper.joinRoom(roomCode: code) { result in
+            DispatchQueue.main.async {
+                defer {
+                    self.isJoiningRoom = false
                 }
-            } else if let errPtr = errPtr {
-                let errorStr = String(cString: errPtr)
-                free(UnsafeMutableRawPointer(mutating: errPtr))
                 
-                self.errorMessage = errorStr
-                self.logger.error("Failed to join room: \(errorStr)")
-                completion(.failure(NSError(domain: "RoomManagerError", code: 1, userInfo: [NSLocalizedDescriptionKey: errorStr])))
-            } else {
-                let errorStr = "Unknown error occurred while joining room"
-                self.errorMessage = errorStr
-                self.logger.error("Failed to join room: \(errorStr)")
-                completion(.failure(NSError(domain: "RoomManagerError", code: 1, userInfo: [NSLocalizedDescriptionKey: errorStr])))
+                switch result {
+                case .success:
+                    // 解析房间代码获取网络配置信息
+                    if let roomInfo = self.parseRoomCode(code) {
+                        self.currentRoom = roomInfo
+                        
+                        // 启动VPN连接
+                        let options = TerracottaOptions(
+                            config: self.generateConfigForRoom(roomInfo)
+                        )
+                        
+                        self.networkManager.startVPN(options: options)
+                        completion(.success(()))
+                    } else {
+                        let errorStr = "Invalid room code format"
+                        self.errorMessage = errorStr
+                        self.logger.error("Failed to parse room code: \(errorStr)")
+                        completion(.failure(NSError(domain: "RoomManagerError", code: 2, userInfo: [NSLocalizedDescriptionKey: errorStr])))
+                    }
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                    self.logger.error("Failed to join room: \(error.localizedDescription)")
+                    completion(.failure(error))
+                }
             }
         }
     }
