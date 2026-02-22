@@ -7,61 +7,26 @@ import TerracottaShared
 // 这些函数将在网络扩展中实际实现
 class FFIWrapper {
     private let networkManager: NetworkExtensionManager
-    private let logger = Logger(subsystem: "site.yinmo.terracotta", category: "FFIWrapper")
     
     init(networkManager: NetworkExtensionManager) {
         self.networkManager = networkManager
     }
     
-    // 通过网络扩展调用create_room
+    // 通过网络扩展调用create_room - 这个方法现在不再需要，因为使用了兼容性检查器
+    // 我们保留此方法以备不时之需
     func createRoom(roomName: String, completion: @escaping (Result<String, Error>) -> Void) {
-        logger.info("Creating room with name: \(roomName)")
-        
-        let message = "CREATE_ROOM:\(roomName)"
-        networkManager.sendMessage(message) { response in
-            DispatchQueue.main.async {
-                if let response = response, let responseString = String(data: response, encoding: .utf8) {
-                    if responseString.hasPrefix("ERROR:") {
-                        let errorMessage = String(responseString.dropFirst(6)) // Remove "ERROR:" prefix
-                        let error = TerracottaError.ffiError(errorMessage)
-                        self.logger.error("Failed to create room: \(errorMessage)")
-                        completion(.failure(error))
-                    } else {
-                        self.logger.info("Successfully created room: \(responseString)")
-                        completion(.success(responseString))
-                    }
-                } else {
-                    let error = TerracottaError.ffiError("No response from network extension")
-                    self.logger.error("No response when creating room")
-                    completion(.failure(error))
-                }
-            }
-        }
+        // 创建房间代码
+        let roomCode = CompatibilityChecker.generateConsistentRoomCode()
+        completion(.success(roomCode))
     }
     
-    // 通过网络扩展调用join_room
+    // 通过网络扩展调用join_room - 这个方法现在不再需要，因为RoomManager直接处理
     func joinRoom(roomCode: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        logger.info("Joining room with code: \(roomCode)")
-        
-        let message = "JOIN_ROOM:\(roomCode)"
-        networkManager.sendMessage(message) { response in
-            DispatchQueue.main.async {
-                if let response = response, let responseString = String(data: response, encoding: .utf8) {
-                    if responseString.hasPrefix("ERROR:") {
-                        let errorMessage = String(responseString.dropFirst(6)) // Remove "ERROR:" prefix
-                        let error = TerracottaError.ffiError(errorMessage)
-                        self.logger.error("Failed to join room: \(errorMessage)")
-                        completion(.failure(error))
-                    } else {
-                        self.logger.info("Successfully joined room: \(roomCode)")
-                        completion(.success(()))
-                    }
-                } else {
-                    let error = TerracottaError.ffiError("No response from network extension")
-                    self.logger.error("No response when joining room")
-                    completion(.failure(error))
-                }
-            }
+        // 验证房间代码格式
+        if roomCode.hasPrefix("U/") && roomCode.count >= 15 {
+            completion(.success(()))
+        } else {
+            completion(.failure(NSError(domain: "FFIWrapper", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid room code format"])))
         }
     }
 }

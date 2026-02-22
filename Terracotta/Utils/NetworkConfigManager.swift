@@ -59,8 +59,8 @@ class NetworkConfigManager {
     private static func generateNetworkSecret(from code: String) -> String {
         // 使用与原版陶瓦联机相同的算法生成网络密钥
         // 确保不同平台生成相同的密钥
-        let paddedCode = (code + String(repeating: "0", count: 32))[..<32]
-        return String(paddedCode).lowercased()
+        let paddedCode = code.padding(toLength: 32, withPad: "0", startingAt: 0)
+        return String(paddedCode[..<paddedCode.index(paddedCode.startIndex, offsetBy: min(32, paddedCode.count))]).lowercased()
     }
     
     /// 生成网络名称

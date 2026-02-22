@@ -190,6 +190,7 @@ struct CreateRoomView: View {
     @Binding var roomName: String
     @Binding var isPresented: Bool
     let completion: (Result<String, Error>) -> Void
+    @EnvironmentObject var roomManager: RoomManager
     
     @State private var tempRoomName: String = ""
     @State private var showingError = false
@@ -239,22 +240,21 @@ struct CreateRoomView: View {
         }
         
         // 通过RoomManager创建房间
-        (UIApplication.shared.windows.first?.rootViewController as? UIHostingController<ContentView>)?.rootView
-            .roomManager?.createRoom(name: tempRoomName) { result in
-                switch result {
-                case .success(let roomCode):
-                    DispatchQueue.main.async {
-                        self.roomName = self.tempRoomName
-                        self.isPresented = false
-                        self.completion(.success(roomCode))
-                    }
-                case .failure(let error):
-                    DispatchQueue.main.async {
-                        self.errorMessage = error.localizedDescription
-                        self.showingError = true
-                    }
+        roomManager.createRoom(name: tempRoomName) { result in
+            switch result {
+            case .success(let roomCode):
+                DispatchQueue.main.async {
+                    self.roomName = self.tempRoomName
+                    self.isPresented = false
+                    self.completion(.success(roomCode))
+                }
+            case .failure(let error):
+                DispatchQueue.main.async {
+                    self.errorMessage = error.localizedDescription
+                    self.showingError = true
                 }
             }
+        }
     }
 }
 
@@ -263,6 +263,7 @@ struct JoinRoomView: View {
     @Binding var roomCode: String
     @Binding var isPresented: Bool
     let completion: (Result<Void, Error>) -> Void
+    @EnvironmentObject var roomManager: RoomManager
     
     @State private var tempRoomCode: String = ""
     @State private var showingError = false
@@ -312,22 +313,21 @@ struct JoinRoomView: View {
         }
         
         // 通过RoomManager加入房间
-        (UIApplication.shared.windows.first?.rootViewController as? UIHostingController<ContentView>)?.rootView
-            .roomManager?.joinRoom(code: tempRoomCode) { result in
-                switch result {
-                case .success:
-                    DispatchQueue.main.async {
-                        self.roomCode = self.tempRoomCode
-                        self.isPresented = false
-                        self.completion(.success(()))
-                    }
-                case .failure(let error):
-                    DispatchQueue.main.async {
-                        self.errorMessage = error.localizedDescription
-                        self.showingError = true
-                    }
+        roomManager.joinRoom(code: tempRoomCode) { result in
+            switch result {
+            case .success:
+                DispatchQueue.main.async {
+                    self.roomCode = self.tempRoomCode
+                    self.isPresented = false
+                    self.completion(.success(()))
+                }
+            case .failure(let error):
+                DispatchQueue.main.async {
+                    self.errorMessage = error.localizedDescription
+                    self.showingError = true
                 }
             }
+        }
     }
 }
 
