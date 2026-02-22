@@ -9,22 +9,29 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var lastAppliedSettings: TunnelNetworkSettingsSnapshot?
     private var needReapplySettings: Bool = false
     private var reasserting = false
+    private var rustInitialized = false
     
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         logger.info("startTunnel(): triggered")
+        
+        // 初始化Rust日志
+        if !rustInitialized {
+            init_rust_logger("info".cString(using: .utf8)!)
+            rustInitialized = true
+        }
         
         // 从共享UserDefaults加载配置
         guard let defaults = UserDefaults(suiteName: APP_GROUP_ID),
               let configData = defaults.data(forKey: "VPNConfig") else {
             logger.error("startTunnel() config is nil")
-            completionHandler("Configuration is not set")
+            completionHandler(NSError(domain: "TerracottaError", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Configuration is not set"]))
             return
         }
         
         // 将配置数据转换为字符串
         guard let configString = String(data: configData, encoding: .utf8) else {
             logger.error("startTunnel() failed to decode config")
-            completionHandler("Failed to decode configuration")
+            completionHandler(NSError(domain: "TerracottaError", code: 1002, userInfo: [NSLocalizedDescriptionKey: "Failed to decode configuration"]))
             return
         }
         
@@ -37,7 +44,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         guard status == 0 else {
             let err = extractRustString(errPtr)
             logger.error("startTunnel() failed to run: \(err ?? "Unknown", privacy: .public)")
-            completionHandler(err ?? "Unknown error")
+            completionHandler(NSError(domain: "TerracottaError", code: 1003, userInfo: [NSLocalizedDescriptionKey: err ?? "Unknown error"]))
             return
         }
         
@@ -45,8 +52,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         registerRustStopCallback()
         registerRunningInfoCallback()
         
-        // 配置隧道网络设置
-        let tunnelNetworkSettings = createTunnelNetworkSettings()
+        // 从配置字符串中提取网络设置
+        let tunnelNetworkSettings = extractNetworkSettings(from: configString)
         setTunnelNetworkSettings(tunnelNetworkSettings) { [weak self] (error) in
             guard let self = self else {
                 completionHandler(error)
@@ -55,6 +62,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             
             if let error = error {
                 logger.error("startTunnel() failed to set tunnel network settings: \(error.localizedDescription)")
+                self.stopRustInstance()
                 completionHandler(error)
                 return
             }
@@ -68,85 +76,118 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
         logger.info("stopTunnel(): reason=\(reason.rawValue, privacy: .public)")
         
-        let status = stop_network_instance()
-        if status != 0 {
-            logger.error("stopTunnel() failed")
-        }
+        stopRustInstance()
         
         isRunning = false
         completionHandler()
     }
     
+    private func stopRustInstance() {
+        let status = stop_network_instance()
+        if status != 0 {
+            logger.error("stopRustInstance() failed")
+        }
+    }
+    
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
         // 处理来自主应用的消息
-        os_log("Received app message: %{public}s", log: OSLog.default, type: .info, messageData.count)
+        logger.info("Received app message with \(messageData.count) bytes")
         
-        if let messageString = String(data: messageData, encoding: .utf8) {
-            if messageString.hasPrefix("CREATE_ROOM:") {
-                let roomName = String(messageString.dropFirst(12)) // Remove "CREATE_ROOM:" prefix
-                var resultPtr: UnsafePointer<CChar>?
-                var errPtr: UnsafePointer<CChar>?
+        guard let messageString = String(data: messageData, encoding: .utf8) else {
+            logger.error("Failed to decode message data")
+            completionHandler?("Invalid message format".data(using: .utf8))
+            return
+        }
+        
+        if messageString.hasPrefix("CREATE_ROOM:") {
+            let roomName = String(messageString.dropFirst(12)) // Remove "CREATE_ROOM:" prefix
+            var resultPtr: UnsafePointer<CChar>?
+            var errPtr: UnsafePointer<CChar>?
+            
+            let roomNameCString = roomName.cString(using: .utf8)!
+            let status = create_room(roomNameCString, &errPtr, &resultPtr)
+            
+            if status == 0, let resultPtr = resultPtr {
+                let roomCode = String(cString: resultPtr)
+                free(UnsafeMutableRawPointer(mutating: resultPtr))
                 
-                let roomNameCString = roomName.cString(using: .utf8)!
-                let status = create_room(roomNameCString, &errPtr, &resultPtr)
+                logger.info("Successfully created room: \(roomCode)")
+                let response = roomCode.data(using: .utf8)
+                completionHandler?(response)
+            } else if let errPtr = errPtr {
+                let errorStr = String(cString: errPtr)
+                free(UnsafeMutableRawPointer(mutating: errPtr))
                 
-                if status == 0, let resultPtr = resultPtr {
-                    let roomCode = String(cString: resultPtr)
-                    free(UnsafeMutableRawPointer(mutating: resultPtr))
-                    
-                    os_log("Successfully created room: %{public}s", log: OSLog.default, type: .info, roomCode)
-                    let response = roomCode.data(using: .utf8)
-                    completionHandler?(response)
-                } else if let errPtr = errPtr {
-                    let errorStr = String(cString: errPtr)
-                    free(UnsafeMutableRawPointer(mutating: errPtr))
-                    
-                    os_log("Failed to create room: %{public}s", log: OSLog.default, type: .error, errorStr)
-                    let response = "ERROR:\(errorStr)".data(using: .utf8)
-                    completionHandler?(response)
-                } else {
-                    let errorStr = "Unknown error occurred while creating room"
-                    os_log("Failed to create room: %{public}s", log: OSLog.default, type: .error, errorStr)
-                    let response = "ERROR:\(errorStr)".data(using: .utf8)
-                    completionHandler?(response)
-                }
-            } else if messageString.hasPrefix("JOIN_ROOM:") {
-                let roomCode = String(messageString.dropFirst(10)) // Remove "JOIN_ROOM:" prefix
-                var errPtr: UnsafePointer<CChar>?
-                
-                let roomCodeCString = roomCode.cString(using: .utf8)!
-                let status = join_room(roomCodeCString, &errPtr)
-                
-                if status == 0 {
-                    os_log("Successfully joined room: %{public}s", log: OSLog.default, type: .info, roomCode)
-                    let response = "SUCCESS".data(using: .utf8)
-                    completionHandler?(response)
-                } else if let errPtr = errPtr {
-                    let errorStr = String(cString: errPtr)
-                    free(UnsafeMutableRawPointer(mutating: errPtr))
-                    
-                    os_log("Failed to join room: %{public}s", log: OSLog.default, type: .error, errorStr)
-                    let response = "ERROR:\(errorStr)".data(using: .utf8)
-                    completionHandler?(response)
-                } else {
-                    let errorStr = "Unknown error occurred while joining room"
-                    os_log("Failed to join room: %{public}s", log: OSLog.default, type: .error, errorStr)
-                    let response = "ERROR:\(errorStr)".data(using: .utf8)
-                    completionHandler?(response)
-                }
+                logger.error("Failed to create room: \(errorStr)")
+                let response = "ERROR:\(errorStr)".data(using: .utf8)
+                completionHandler?(response)
             } else {
-                // 旧的处理方式
-                os_log("Received unknown message type", log: OSLog.default, type: .error)
-                let response = "Message received".data(using: .utf8)
+                let errorStr = "Unknown error occurred while creating room"
+                logger.error("Failed to create room: \(errorStr)")
+                let response = "ERROR:\(errorStr)".data(using: .utf8)
+                completionHandler?(response)
+            }
+        } else if messageString.hasPrefix("JOIN_ROOM:") {
+            let roomCode = String(messageString.dropFirst(10)) // Remove "JOIN_ROOM:" prefix
+            var errPtr: UnsafePointer<CChar>?
+            
+            let roomCodeCString = roomCode.cString(using: .utf8)!
+            let status = join_room(roomCodeCString, &errPtr)
+            
+            if status == 0 {
+                logger.info("Successfully joined room: \(roomCode)")
+                let response = "SUCCESS".data(using: .utf8)
+                completionHandler?(response)
+            } else if let errPtr = errPtr {
+                let errorStr = String(cString: errPtr)
+                free(UnsafeMutableRawPointer(mutating: errPtr))
+                
+                logger.error("Failed to join room: \(errorStr)")
+                let response = "ERROR:\(errorStr)".data(using: .utf8)
+                completionHandler?(response)
+            } else {
+                let errorStr = "Unknown error occurred while joining room"
+                logger.error("Failed to join room: \(errorStr)")
+                let response = "ERROR:\(errorStr)".data(using: .utf8)
+                completionHandler?(response)
+            }
+        } else if messageString == "runningInfo" {
+            // 获取运行信息
+            var infoPtr: UnsafePointer<CChar>?
+            var errPtr: UnsafePointer<CChar>?
+            
+            let status = get_running_info(&infoPtr, &errPtr)
+            
+            if status == 0, let infoPtr = infoPtr {
+                let infoStr = String(cString: infoPtr)
+                free(UnsafeMutableRawPointer(mutating: infoPtr))
+                
+                logger.info("Returning running info")
+                let response = infoStr.data(using: .utf8)
+                completionHandler?(response)
+            } else if let errPtr = errPtr {
+                let errorStr = String(cString: errPtr)
+                free(UnsafeMutableRawPointer(mutating: errPtr))
+                
+                logger.error("Failed to get running info: \(errorStr)")
+                let response = "ERROR:\(errorStr)".data(using: .utf8)
+                completionHandler?(response)
+            } else {
+                let errorStr = "Unknown error occurred while getting running info"
+                logger.error("Failed to get running info: \(errorStr)")
+                let response = "ERROR:\(errorStr)".data(using: .utf8)
                 completionHandler?(response)
             }
         } else {
+            logger.info("Received unknown message type: \(messageString)")
             let response = "Message received".data(using: .utf8)
             completionHandler?(response)
         }
     }
     
-    private func createTunnelNetworkSettings() -> NEPacketTunnelNetworkSettings {
+    private func extractNetworkSettings(from configString: String) -> NEPacketTunnelNetworkSettings {
+        // 解析配置以提取网络设置
+        // 这里使用一个简化的实现，可以进一步完善
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
         
         // IPv4 设置
@@ -245,7 +286,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private func applyNetworkSettings(_ completion: @escaping ((any Error)?) -> Void) {
         guard !reasserting else {
             logger.error("applyNetworkSettings() still in progress")
-            completion("still in progress")
+            completion(NSError(domain: "TerracottaError", code: 1004, userInfo: [NSLocalizedDescriptionKey: "Settings update in progress"]))
             return
         }
         
@@ -254,7 +295,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         needReapplySettings = false
         
         // 创建新的网络设置
-        let settings = createTunnelNetworkSettings()
+        let settings = extractNetworkSettings(from: "") // 在实际实现中，可以从当前配置获取设置
         let newSnapshot = snapshotSettings(settings)
         let wrappedCompletion: (Error?) -> Void = { [weak self] error in
             DispatchQueue.main.async {
@@ -277,7 +318,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         
         if newSnapshot == lastAppliedSettings {
-            logger.warning("applyNetworkSettings() new settings are exactly the same as last applied, skipping")
+            logger.info("applyNetworkSettings() new settings are exactly the same as last applied, skipping")
             wrappedCompletion(nil)
             return
         }
@@ -296,8 +337,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             }
             
             // 检查是否需要设置TUN FD
-            let tunFd = self.packetFlow.value(forKeyPath: "socket.fileDescriptor") as? Int32 ?? self.tunnelFileDescriptor()
-            if let tunFd {
+            if let tunFd = self.packetFlow.value(forKeyPath: "socket.fileDescriptor") as? Int32 {
                 var errPtr: UnsafePointer<CChar>? = nil
                 let ret = set_tun_fd(tunFd, &errPtr)
                 guard ret == 0 else {
@@ -306,27 +346,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     wrappedCompletion(NSError(domain: "TerracottaError", code: 997, userInfo: [NSLocalizedDescriptionKey: err ?? "Failed to set TUN fd"]))
                     return
                 }
+                logger.info("applyNetworkSettings() successfully set TUN fd to \(tunFd)")
             } else {
-                logger.error("applyNetworkSettings() no available tun fd")
+                logger.warning("applyNetworkSettings() no available tun fd")
             }
             
             logger.info("applyNetworkSettings() settings applied")
             wrappedCompletion(nil)
         }
-    }
-    
-    private func tunnelFileDescriptor() -> Int32? {
-        // 获取TUN接口的文件描述符
-        guard let tunInterface = self.networkSettings?.ipv4Settings?.addresses?.first else {
-            return nil
-        }
-        
-        // 尝试通过packetFlow获取TUN文件描述符
-        if let fileDescriptor = self.packetFlow.value(forKeyPath: "socket.fileDescriptor") as? Int32 {
-            return fileDescriptor
-        }
-        
-        return nil
     }
     
     private func extractRustString(_ ptr: UnsafePointer<CChar>?) -> String? {
@@ -368,13 +395,3 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         logger.info("wake(): called")
     }
 }
-
-// 定义命令枚举
-enum ProviderCommand: String {
-    case runningInfo = "runningInfo"
-    case lastNetworkSettings = "lastNetworkSettings"
-    case exportOSLog = "exportOSLog"  // 添加日志导出命令
-}
-
-// 错误扩展
-extension String: @retroactive Error {}

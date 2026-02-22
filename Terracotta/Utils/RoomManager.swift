@@ -8,6 +8,7 @@ class RoomManager: ObservableObject {
     @Published var isCreatingRoom = false
     @Published var isJoiningRoom = false
     @Published var errorMessage: String?
+    @Published var rooms: [RoomInfo] = []
     
     private let networkManager: NetworkExtensionManager
     private let ffiWrapper: FFIWrapper
@@ -34,6 +35,7 @@ class RoomManager: ObservableObject {
                     // 创建房间信息
                     let roomInfo = RoomInfo(code: roomCode, name: name)
                     self.currentRoom = roomInfo
+                    self.rooms.append(roomInfo)
                     
                     self.logger.info("Successfully created room: \(roomCode)")
                     completion(.success(roomCode))
@@ -63,16 +65,18 @@ class RoomManager: ObservableObject {
                     if let roomInfo = self.parseRoomCode(code) {
                         self.currentRoom = roomInfo
                         
-                        // 启动VPN连接
+                        // 使用兼容的配置生成器
+                        let config = NetworkConfigManager.generateCompatibleConfig(for: roomInfo, isHost: false)
+                        
                         let options = TerracottaOptions(
-                            config: self.generateConfigForRoom(roomInfo),
+                            config: config,
                             ipv4: nil,
                             ipv6: nil,
-                            mtu: nil,
+                            mtu: 1380,
                             routes: [],
                             logLevel: .info,
-                            magicDNS: false,
-                            dns: []
+                            magicDNS: true,
+                            dns: ["1.1.1.1", "8.8.8.8"]
                         )
                         
                         self.networkManager.startVPN(options: options)
@@ -93,19 +97,33 @@ class RoomManager: ObservableObject {
     }
     
     private func parseRoomCode(_ code: String) -> RoomInfo? {
-        // 简单的房间代码解析逻辑，实际实现可能需要更复杂的解析
-        // 假设格式为 U/XXXX-XXXX-XXXX-XXXX
+        // 验证房间代码格式，应该为 U/XXXX-XXXX-XXXX-XXXX
         let components = code.split(separator: "/")
-        if components.count >= 2 && components[0] == "U" {
-            let roomName = "Room-\(String(components[1]).prefix(4))"
-            return RoomInfo(code: code, name: roomName)
+        if components.count < 2 || components[0] != "U" {
+            return nil
         }
-        return nil
+        
+        // 提取各个部分
+        let parts = String(components[1]).split(separator: "-")
+        if parts.count != 4 {
+            return nil
+        }
+        
+        // 从第一部分获取房间名称
+        let roomName = "Room-\(String(parts[0]))"
+        return RoomInfo(code: code, name: roomName)
     }
     
     private func generateConfigForRoom(_ roomInfo: RoomInfo) -> String {
-        // 生成TOML格式的配置
-        // 这里使用简化的配置，实际实现可能需要更复杂的配置生成逻辑
+        // 生成与其他端兼容的TOML格式配置
+        // 解析房间代码以提取网络信息
+        let codeWithoutPrefix = roomInfo.code
+            .replacingOccurrences(of: "U/", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        
+        // 使用房间代码的一部分作为网络密钥
+        let networkSecret = codeWithoutPrefix.count > 16 ? 
+            String(codeWithoutPrefix.prefix(16)) : codeWithoutPrefix
         
         let config = """
         [flags]
@@ -114,13 +132,20 @@ class RoomManager: ObservableObject {
         
         [network_identity]
         network_name = "\(roomInfo.name)"
-        network_secret = "terracotta-\(roomInfo.code)"
+        network_secret = "\(networkSecret.lowercased())"
         
         [listeners]
         - "udp://0.0.0.0:11010"
+        - "tcp://0.0.0.0:11010"
         
         [dhcp]
         ipv4 = "10.14.0.0/16"
+        
+        [rpc]
+        listen_port = 13448
+        
+        [websocket]
+        enable = false
         """
         
         return config
@@ -130,5 +155,15 @@ class RoomManager: ObservableObject {
         logger.info("Leaving room")
         currentRoom = nil
         networkManager.stopVPN()
+    }
+    
+    func listRooms() -> [RoomInfo] {
+        return rooms
+    }
+    
+    func refreshRooms() {
+        // 实现房间列表刷新逻辑
+        logger.info("Refreshing room list")
+        // 这里可以实现扫描或从服务器获取房间列表的逻辑
     }
 }

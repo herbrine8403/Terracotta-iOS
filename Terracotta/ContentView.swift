@@ -1,7 +1,7 @@
 import SwiftUI
 import TerracottaShared
 
-@available(iOS 15.0, *)
+@available(iOS 15.4, *)
 struct ContentView: View {
     @EnvironmentObject var networkManager: NetworkExtensionManager
     @EnvironmentObject var roomManager: RoomManager
@@ -11,6 +11,8 @@ struct ContentView: View {
     @State private var roomName: String = ""
     @State private var showingAlert = false
     @State private var alertMessage = ""
+    @State private var showingCreateSheet = false
+    @State private var showingJoinSheet = false
     
     var body: some View {
         NavigationView {
@@ -53,10 +55,9 @@ struct ContentView: View {
                 // 创建房间部分
                 GroupBox(label: Text("创建房间")) {
                     VStack {
-                        TextField("房间名称", text: $roomName)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                        
-                        Button(action: createRoom) {
+                        Button(action: {
+                            showingCreateSheet = true
+                        }) {
                             Text("创建房间")
                                 .font(.headline)
                                 .foregroundColor(.white)
@@ -72,10 +73,9 @@ struct ContentView: View {
                 // 加入房间部分
                 GroupBox(label: Text("加入房间")) {
                     VStack {
-                        TextField("房间代码", text: $roomCode)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                        
-                        Button(action: joinRoom) {
+                        Button(action: {
+                            showingJoinSheet = true
+                        }) {
                             Text("加入房间")
                                 .font(.headline)
                                 .foregroundColor(.white)
@@ -88,16 +88,58 @@ struct ContentView: View {
                     }
                 }
                 
+                // 当前房间信息
+                if let currentRoom = roomManager.currentRoom {
+                    GroupBox(label: Text("当前房间")) {
+                        VStack(alignment: .leading) {
+                            Text("房间代码: \(currentRoom.code)")
+                                .font(.caption)
+                            Text("房间名称: \(currentRoom.name)")
+                                .font(.caption)
+                        }
+                    }
+                }
+                
                 Spacer()
             }
             .padding()
-            // 修复iOS 14.5兼容性问题
+            // 修复iOS 14.5兼容性问题 - 现在应该是15.4
             .alert(isPresented: $showingAlert) {
                 Alert(
-                    title: Text("错误"),
+                    title: Text("提示"),
                     message: Text(alertMessage),
                     dismissButton: .default(Text("确定"))
                 )
+            }
+            .sheet(isPresented: $showingCreateSheet) {
+                CreateRoomView(
+                    roomName: $roomName,
+                    isPresented: $showingCreateSheet
+                ) { result in
+                    switch result {
+                    case .success(let roomCode):
+                        alertMessage = "房间创建成功: \(roomCode)"
+                        showingAlert = true
+                    case .failure(let error):
+                        alertMessage = "创建房间错误: \(error.localizedDescription)"
+                        showingAlert = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showingJoinSheet) {
+                JoinRoomView(
+                    roomCode: $roomCode,
+                    isPresented: $showingJoinSheet
+                ) { result in
+                    switch result {
+                    case .success:
+                        alertMessage = "成功加入房间"
+                        showingAlert = true
+                    case .failure(let error):
+                        alertMessage = "加入房间错误: \(error.localizedDescription)"
+                        showingAlert = true
+                    }
+                }
             }
         }
     }
@@ -135,51 +177,157 @@ struct ContentView: View {
     }
     
     private func connectToRoom() {
-        // 连接逻辑
+        // 连接逻辑 - 通过创建或加入房间触发
     }
     
     private func disconnectFromRoom() {
-        networkManager.stopVPN()
+        roomManager.leaveRoom()
+    }
+}
+
+// 创建房间视图
+struct CreateRoomView: View {
+    @Binding var roomName: String
+    @Binding var isPresented: Bool
+    let completion: (Result<String, Error>) -> Void
+    
+    @State private var tempRoomName: String = ""
+    @State private var showingError = false
+    @State private var errorMessage = ""
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Text("创建房间")
+                    .font(.title)
+                    .fontWeight(.bold)
+                
+                TextField("房间名称", text: $tempRoomName)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding()
+                
+                Button(action: createRoom) {
+                    Text("创建")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.green)
+                        .cornerRadius(10)
+                }
+                .padding(.horizontal)
+                
+                Spacer()
+            }
+            .padding()
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("取消") {
+                        isPresented = false
+                    }
+                }
+            }
+        }
     }
     
     private func createRoom() {
-        roomManager.createRoom(name: roomName) { result in
-            switch result {
-            case .success(let roomCode):
-                DispatchQueue.main.async {
-                    alertMessage = "房间创建成功: \(roomCode)"
-                    showingAlert = true
+        if tempRoomName.isEmpty {
+            errorMessage = "请输入房间名称"
+            showingError = true
+            return
+        }
+        
+        // 通过RoomManager创建房间
+        (UIApplication.shared.windows.first?.rootViewController as? UIHostingController<ContentView>)?.rootView
+            .roomManager?.createRoom(name: tempRoomName) { result in
+                switch result {
+                case .success(let roomCode):
+                    DispatchQueue.main.async {
+                        self.roomName = self.tempRoomName
+                        self.isPresented = false
+                        self.completion(.success(roomCode))
+                    }
+                case .failure(let error):
+                    DispatchQueue.main.async {
+                        self.errorMessage = error.localizedDescription
+                        self.showingError = true
+                    }
                 }
-            case .failure(let error):
-                DispatchQueue.main.async {
-                    alertMessage = "创建房间错误: \(error.localizedDescription)"
-                    showingAlert = true
+            }
+    }
+}
+
+// 加入房间视图
+struct JoinRoomView: View {
+    @Binding var roomCode: String
+    @Binding var isPresented: Bool
+    let completion: (Result<Void, Error>) -> Void
+    
+    @State private var tempRoomCode: String = ""
+    @State private var showingError = false
+    @State private var errorMessage = ""
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Text("加入房间")
+                    .font(.title)
+                    .fontWeight(.bold)
+                
+                TextField("房间代码", text: $tempRoomCode)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding()
+                
+                Button(action: joinRoom) {
+                    Text("加入")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.orange)
+                        .cornerRadius(10)
+                }
+                .padding(.horizontal)
+                
+                Spacer()
+            }
+            .padding()
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("取消") {
+                        isPresented = false
+                    }
                 }
             }
         }
     }
     
     private func joinRoom() {
-        if roomCode.isEmpty {
-            alertMessage = "请输入房间代码"
-            showingAlert = true
+        if tempRoomCode.isEmpty {
+            errorMessage = "请输入房间代码"
+            showingError = true
             return
         }
         
-        roomManager.joinRoom(code: roomCode) { result in
-            switch result {
-            case .success:
-                DispatchQueue.main.async {
-                    alertMessage = "成功加入房间"
-                    showingAlert = true
-                }
-            case .failure(let error):
-                DispatchQueue.main.async {
-                    alertMessage = "加入房间错误: \(error.localizedDescription)"
-                    showingAlert = true
+        // 通过RoomManager加入房间
+        (UIApplication.shared.windows.first?.rootViewController as? UIHostingController<ContentView>)?.rootView
+            .roomManager?.joinRoom(code: tempRoomCode) { result in
+                switch result {
+                case .success:
+                    DispatchQueue.main.async {
+                        self.roomCode = self.tempRoomCode
+                        self.isPresented = false
+                        self.completion(.success(()))
+                    }
+                case .failure(let error):
+                    DispatchQueue.main.async {
+                        self.errorMessage = error.localizedDescription
+                        self.showingError = true
+                    }
                 }
             }
-        }
     }
 }
 

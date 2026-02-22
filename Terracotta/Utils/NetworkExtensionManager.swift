@@ -31,8 +31,10 @@ class NetworkExtensionManager: ObservableObject {
         
         loadVPNManager { [weak self] in
             guard let self = self, let vpnManager = self.vpnManager else {
-                self?.status = .error
-                self?.errorMessage = "Failed to load VPN manager"
+                DispatchQueue.main.async {
+                    self?.status = .error
+                    self?.errorMessage = "Failed to load VPN manager"
+                }
                 return
             }
             
@@ -42,12 +44,16 @@ class NetworkExtensionManager: ObservableObject {
                 startOptions["action"] = "start" as NSString
                 
                 try vpnManager.connection.startVPNTunnel(options: startOptions)
-                self.status = .connecting
-                self.errorMessage = nil
+                DispatchQueue.main.async {
+                    self.status = .connecting
+                    self.errorMessage = nil
+                }
                 self.logger.info("VPN tunnel started successfully")
             } catch {
-                self.status = .error
-                self.errorMessage = "Failed to start VPN: \(error.localizedDescription)"
+                DispatchQueue.main.async {
+                    self.status = .error
+                    self.errorMessage = "Failed to start VPN: \(error.localizedDescription)"
+                }
                 self.logger.error("Failed to start VPN: \(error.localizedDescription)")
             }
         }
@@ -61,9 +67,11 @@ class NetworkExtensionManager: ObservableObject {
             
             if vpnManager.connection.status == .connected || vpnManager.connection.status == .connecting {
                 vpnManager.connection.stopVPNTunnel()
-                self.status = .disconnected
-                self.errorMessage = nil
-                self.ipAddress = nil
+                DispatchQueue.main.async {
+                    self.status = .disconnected
+                    self.errorMessage = nil
+                    self.ipAddress = nil
+                }
                 self.logger.info("VPN tunnel stopped")
             }
         }
@@ -213,23 +221,45 @@ class NetworkExtensionManager: ObservableObject {
     
     // 发送消息到VPN扩展
     func sendMessage(_ message: String, completion: @escaping (Data?) -> Void) {
-        guard let vpnManager = vpnManager else {
-            completion(nil)
-            return
-        }
-        
-        // 检查VPN连接状态
-        guard vpnManager.connection.status == .connected || vpnManager.connection.status == .connecting else {
-            print("VPN is not active. Status: \(vpnManager.connection.status)")
-            completion(nil)
-            return
-        }
-        
-        let messageData = message.data(using: .utf8) ?? Data()
-        
-        // 使用API发送消息到网络扩展
-        vpnManager.connection.sendProviderMessage(messageData) { response in
-            completion(response)
+        // 检查iOS版本是否支持sendProviderMessage
+        if #available(iOS 15.1, *) {
+            // 在iOS 15.1+上使用sendProviderMessage
+            guard let vpnManager = vpnManager,
+                  vpnManager.connection.status == .connected else {
+                logger.error("VPN is not connected")
+                completion(nil)
+                return
+            }
+            
+            let messageData = message.data(using: .utf8) ?? Data()
+            vpnManager.connection.sendProviderMessage(messageData) { response in
+                completion(response as? Data)
+            }
+        } else {
+            // 对于较早的iOS版本，使用其他机制
+            // 这里使用UserDefaults作为消息队列
+            logger.info("Using alternative message system for iOS < 15.1")
+            
+            // 使用UserDefaults作为消息队列
+            DispatchQueue.global(qos: .background).async {
+                let queueKey = "MessageQueue"
+                let queueData = UserDefaults.standard.array(forKey: queueKey) as? [String] ?? []
+                var newQueue = queueData
+                newQueue.append(message)
+                
+                UserDefaults.standard.set(newQueue, forKey: queueKey)
+                
+                // 等待响应
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+                    let responseQueue = UserDefaults.standard.array(forKey: "ResponseQueue") as? [String] ?? []
+                    if let response = responseQueue.first {
+                        UserDefaults.standard.set(Array(responseQueue.dropFirst()), forKey: "ResponseQueue")
+                        completion(response.data(using: .utf8))
+                    } else {
+                        completion(nil)
+                    }
+                }
+            }
         }
     }
     
